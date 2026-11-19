@@ -35,4 +35,5 @@ O dono pediu um serviço em Rust, num projeto privado, pronto para o Grafana, po
 - **0.3.0:** o vocabulário. *"Freio puxado é não deixar o processador solto pra fazer o que quiser."* O painel deixou de dizer "solto": há o **limite normal**, sempre valendo, e o **freio de calor**, que aperta mais.
 - **A varredura:** de 25 a 45 W, sem overclock, mesmo desempenho sustentado (~1.270 MB/s, ~2,43 GHz, ~25 W) e picos de 99–100 °C na arrancada, antes de o freio reagir.
 - **0.4.0:** *"Crie um sistema curva para prever um pico e puxar o freio."* Previsão pela tendência das últimas 5 leituras, curva de 80 °C (38 W) a 92 °C (25 W), freia na hora e solta devagar.
-- **O rojão:** uma build de release do VintageLightbox do zero, com os 8 threads, para ver se a 0.4 segura (resultado em [a máquina](maquina.md)).
+- **O rojão:** uma build de release do VintageLightbox do zero, com os 8 threads. A 0.4 freou aos 87 °C, prevendo o pico, e segurou a CPU entre 80 e 88 °C ([a máquina](maquina.md)). Perto do fim, a fedora parou de responder, por uma causa ainda não investigada.
+- **O que vem:** o freio antecipado por processos, segurar os mal-educados e avisar o Grafana de cada intervenção (#2); o freio dirigido no Docker (#3); o pacote RPM.

@@ -51,7 +51,26 @@ O que isso mostra:
 
 ## O rojão: a build do VintageLightbox
 
-ROJAO_AQUI
+Em 19/11/2026, com a 0.4.0 (curva com previsão) instalada: uma build de release do VintageLightbox **do zero**, com os **8 threads** (`CARGO_BUILD_JOBS=8`), num `target` descartável. É a carga mais pesada que esta máquina recebe; com a regra antiga, compilações assim levavam a CPU a 99–100 °C.
+
+O que o termostato registrou:
+
+| Momento | CPU | Previsão | Freio | PL1 | Potência real |
+|---|---|---|---|---|---|
+| Arrancada | 87 °C | 129 °C em 10 s (+4,2 °C/s) | acionado na hora | 25,0 W | — |
+| 6,5 min | 83 °C | 85 °C | 59 % | 30,3 W | 29,1 W |
+| 10 min | 88 °C | 90 °C | 85 % | 27,0 W | — |
+| 13,7 min (fase final, 1 `rustc`) | 80 °C | 80 °C | 88 % | 26,5 W | — |
+
+A linha do journal na arrancada:
+
+```
+🔥 87 °C agora, 129 °C previstos em 10 s (+4.2 °C/s): freio de calor acionado, PL1 em 25.0 W
+```
+
+- **A previsão funcionou:** o freio agiu aos **87 °C**, ao ver a temperatura subindo +4,2 °C/s. Na varredura com a regra antiga, o freio só agia depois de a CPU já estar em 99–100 °C.
+- Durante a build, a CPU ficou entre **80 e 88 °C**, com a frequência média em ~2,4 GHz. Os "129 °C previstos" não são uma temperatura real: é para onde ela iria naquele ritmo, o bastante para a curva saber que precisava frear forte.
+- **A medição não chegou ao fim.** Por volta dos 14 min, já depois do último dado (80 °C), a fedora parou de responder por completo (SSH, Tailscale e Grafana), com o e2e de outra sessão na fila para começar. A causa ainda não foi investigada; o último dado de temperatura antes disso estava normal.
 
 ## Próximos passos
 
