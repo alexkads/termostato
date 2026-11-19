@@ -32,6 +32,10 @@ pub struct Retrato {
     pub pl1_w: Option<f64>,
     pub pl2_w: Option<f64>,
     pub pl1_alvo_w: f64,
+    /// O alvo de temperatura em vigor (0 = sem alvo).
+    pub alvo_c: f64,
+    /// Quantos ajustes (`termostato chave=valor`) estão em vigor.
+    pub ajustes: usize,
     pub freio_acionado: bool,
     pub temperatura_prevista_c: Option<f64>,
     pub tendencia_c_s: Option<f64>,
@@ -394,6 +398,21 @@ impl Retrato {
             "{limite=\"pl1_alvo\"}",
             self.pl1_alvo_w,
         );
+
+        metrica(
+            &mut s,
+            "termostato_alvo_celsius",
+            "gauge",
+            "Alvo de temperatura em vigor (termostato CPU50C); 0 = sem alvo, só a curva.",
+        );
+        valor(&mut s, "termostato_alvo_celsius", "", self.alvo_c);
+        metrica(
+            &mut s,
+            "termostato_ajustes",
+            "gauge",
+            "Ajustes (termostato chave=valor) em vigor por cima do /etc/termostato.toml.",
+        );
+        valor(&mut s, "termostato_ajustes", "", self.ajustes as f64);
 
         metrica(
             &mut s,

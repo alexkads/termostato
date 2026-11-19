@@ -21,6 +21,12 @@ janela_leituras = 5
 previsao_s = 10
 subida_w_por_s = 0.5
 
+# Alvo de temperatura (°C): segura a CPU nele, baixando o PL1 até pl1_minimo_w.
+# 0 = sem alvo, só a curva. Na hora, sem editar aqui: `sudo termostato CPU50C`.
+alvo_c = 0
+pl1_minimo_w = 8
+alvo_ganho_w_por_c_s = 0.5
+
 # Segundos entre leituras.
 intervalo_s = 2
 

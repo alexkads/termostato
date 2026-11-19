@@ -19,6 +19,12 @@
 //!    vale na hora. Se é maior, o PL1 sobe no máximo `subida_w_por_s` por
 //!    segundo. É isso que substitui a histerese: sem calor novo, o freio vai
 //!    soltando aos poucos, sem o efeito sanfona.
+//!
+//! **O alvo** (`alvo_c`, ou `sudo termostato CPU50C`): além da curva, um
+//! controle integral segura a CPU numa temperatura. Acima do alvo (de agora ou
+//! prevista), o PL1 do alvo desce `alvo_ganho_w_por_c_s` × °C de erro por
+//! segundo; abaixo, sobe no máximo `subida_w_por_s`. Fica entre o
+//! `pl1_minimo_w` e o `pl1_normal_w`, e vale o menor entre ele e a curva.
 
 use std::collections::VecDeque;
 
@@ -47,6 +53,8 @@ pub struct Decisao {
     pub pl1_w: f64,
     /// 0 = limite normal; 1 = freio no máximo (`pl1_freio_w`).
     pub intensidade: f64,
+    /// O alvo de temperatura (e não a curva) é quem limita o PL1 agora.
+    pub pelo_alvo: bool,
     pub mudanca: Option<Mudanca>,
 }
 
@@ -56,6 +64,8 @@ pub struct Freio {
     historico: VecDeque<(f64, f64)>,
     pl1_w: Option<f64>,
     acionado: bool,
+    /// O PL1 que o controle do alvo quer; `None` sem alvo.
+    pl1_do_alvo: Option<f64>,
 }
 
 /// O PL1 desejado para uma temperatura, pela curva.
@@ -117,7 +127,11 @@ impl Freio {
         let maior = prevista_processos_c.map_or(pela_temperatura, |p| p.max(pela_temperatura));
         let antecipado = prevista_processos_c.is_some_and(|p| p > pela_temperatura)
             && curva(maior, cfg) < curva(pela_temperatura, cfg);
-        let desejado = curva(maior, cfg);
+        let pela_curva = curva(maior, cfg);
+        let dt = anterior.map_or(0.0, |antes| (agora_s - antes).max(0.0));
+        let do_alvo = self.seguir_o_alvo(pela_temperatura, dt, cfg);
+        let pelo_alvo = do_alvo.is_some_and(|p| p < pela_curva);
+        let desejado = do_alvo.map_or(pela_curva, |p| p.min(pela_curva));
 
         let pl1_w = match (self.pl1_w, anterior) {
             (Some(atual), _) if desejado <= atual => desejado,
@@ -150,8 +164,32 @@ impl Freio {
             antecipado,
             pl1_w,
             intensidade,
+            pelo_alvo,
             mudanca,
         }
+    }
+
+    /// O controle integral do alvo: o PL1 que segura a temperatura nele.
+    fn seguir_o_alvo(&mut self, referencia_c: f64, dt: f64, cfg: &Config) -> Option<f64> {
+        if cfg.alvo_c <= 0.0 {
+            self.pl1_do_alvo = None;
+            return None;
+        }
+        let atual = self
+            .pl1_do_alvo
+            .or(self.pl1_w)
+            .unwrap_or(cfg.pl1_normal_w)
+            .min(cfg.pl1_normal_w);
+        let erro = referencia_c - cfg.alvo_c;
+        let passo = cfg.alvo_ganho_w_por_c_s * erro.abs() * dt;
+        let novo = if erro > 0.0 {
+            atual - passo
+        } else {
+            atual + passo.min(cfg.subida_w_por_s * dt)
+        };
+        let novo = novo.clamp(cfg.pl1_minimo_w, cfg.pl1_normal_w);
+        self.pl1_do_alvo = Some(novo);
+        Some(novo)
     }
 }
 
@@ -284,5 +322,97 @@ mod testes {
         }
         assert!(d.tendencia_c_s < 0.0);
         assert!(quase(d.prevista_c, 84.0));
+    }
+
+    fn com_alvo(alvo: f64) -> Config {
+        Config {
+            alvo_c: alvo,
+            ..Config::default()
+        }
+    }
+
+    #[test]
+    fn sem_alvo_nada_muda() {
+        let c = cfg();
+        let mut f = Freio::default();
+        for i in 0..10 {
+            let d = f.ler(2.0 * f64::from(i), 60.0, None, &c);
+            assert!(quase(d.pl1_w, 38.0));
+            assert!(!d.pelo_alvo);
+        }
+    }
+
+    #[test]
+    fn acima_do_alvo_o_pl1_desce_ate_o_minimo() {
+        // 60 °C com alvo de 50: 10 °C de erro × 0,5 W/(°C·s) = 5 W/s.
+        let c = com_alvo(50.0);
+        let mut f = Freio::default();
+        let d0 = f.ler(0.0, 60.0, None, &c);
+        assert!(
+            quase(d0.pl1_w, 38.0),
+            "primeira leitura sem dt: {}",
+            d0.pl1_w
+        );
+        let d1 = f.ler(2.0, 60.0, None, &c);
+        assert!(quase(d1.pl1_w, 28.0), "{}", d1.pl1_w);
+        assert!(d1.pelo_alvo);
+        assert_eq!(d1.mudanca, Some(Mudanca::Acionou));
+        let mut d = d1;
+        for i in 2..20 {
+            d = f.ler(2.0 * f64::from(i), 60.0, None, &c);
+        }
+        assert!(quase(d.pl1_w, c.pl1_minimo_w), "piso: {}", d.pl1_w);
+    }
+
+    #[test]
+    fn abaixo_do_alvo_sobe_devagar_e_volta_ao_normal() {
+        let c = com_alvo(50.0);
+        let mut f = Freio::default();
+        for i in 0..20 {
+            f.ler(2.0 * f64::from(i), 60.0, None, &c);
+        }
+        // Esfriou para 40 °C: o erro pediria 5 W/s, mas a subida é de 0,5 W/s.
+        let d = f.ler(40.0, 40.0, None, &c);
+        assert!(quase(d.pl1_w, c.pl1_minimo_w + 1.0), "{}", d.pl1_w);
+        let mut d = d;
+        for i in 21..80 {
+            d = f.ler(2.0 * f64::from(i), 40.0, None, &c);
+        }
+        assert!(quase(d.pl1_w, 38.0));
+        assert!(!f.acionado());
+    }
+
+    #[test]
+    fn no_alvo_o_pl1_para() {
+        let c = com_alvo(50.0);
+        let mut f = Freio::default();
+        f.ler(0.0, 60.0, None, &c);
+        let a = f.ler(2.0, 60.0, None, &c).pl1_w;
+        let b = f.ler(4.0, 50.0, None, &c).pl1_w;
+        // Tendência de descida não projeta: a 50 °C, erro zero, o PL1 fica.
+        assert!(quase(a, b), "{a} → {b}");
+    }
+
+    #[test]
+    fn a_curva_ainda_manda_quando_freia_mais() {
+        // Alvo alto (90 °C), mas 92 °C agora: a curva leva a 25 W de uma vez.
+        let c = com_alvo(90.0);
+        let mut f = Freio::default();
+        let d = f.ler(0.0, 92.0, None, &c);
+        assert!(quase(d.pl1_w, 25.0));
+        assert!(!d.pelo_alvo);
+    }
+
+    #[test]
+    fn tirar_o_alvo_solta_devagar() {
+        let mut c = com_alvo(50.0);
+        let mut f = Freio::default();
+        for i in 0..20 {
+            f.ler(2.0 * f64::from(i), 60.0, None, &c);
+        }
+        c.alvo_c = 0.0;
+        let d = f.ler(40.0, 60.0, None, &c);
+        assert!(quase(d.pl1_w, c.pl1_minimo_w + 1.0), "{}", d.pl1_w);
+        assert!(!d.pelo_alvo);
     }
 }

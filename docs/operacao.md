@@ -58,9 +58,29 @@ ssh fedora 'cd ~/oficina/repos/termostato && ./desinstalar.sh'
 
 Remove o pacote (que devolve a fábrica e religa o `thermald`), apaga a configuração e o estado e tira o termostato do Prometheus e do Grafana. É o único caminho que volta o PL1 aos 100 W do firmware.
 
-## Ajustar
+## Ajustar na hora (`termostato chave=valor`)
 
-Edite o `/etc/termostato.toml` e reinicie:
+Qualquer parâmetro da tabela abaixo muda **com o serviço rodando**, sem reiniciar e sem editar o arquivo do pacote. Ele vale em até um intervalo (2 s):
+
+```bash
+ssh fedora 'sudo termostato CPU50C'                               # segura a CPU em 50 °C
+ssh fedora 'sudo termostato pl1_normal_w=30 previsao_s=15 maos.modo=agir'
+ssh fedora 'sudo termostato pl1_normal_w=padrao'                  # tira um ajuste
+ssh fedora 'sudo termostato CPULIVRE'                             # sem alvo (alvo_c=0)
+ssh fedora 'sudo termostato padrao'                               # tira todos
+ssh fedora 'termostato ajustes'                                   # o que está em vigor
+```
+
+- **`CPU<n>C`** é o atalho de `alvo_c=<n>`, aceito em maiúsculas ou minúsculas e com vírgula ou ponto (`CPU62,5C`), de 40 a 95 °C. O termostato baixa o PL1 o quanto precisar, até o `pl1_minimo_w` (8 W), para a CPU ficar no alvo. Depois volta a subir devagar (0,5 W/s) quando há folga.
+- O pedido é **conferido antes de gravar**, com as mesmas regras do toml. Chave que não existe, valor fora da faixa ou freio acima do normal são recusados, e nada é gravado.
+- Os ajustes moram em `/var/lib/termostato/ajustes.toml`, por cima do `/etc/termostato.toml`. Sobrevivem a um reinício e somem com `termostato padrao` ou `--desinstalar`.
+- Cada mudança aparece no journal (🎛️), vira anotação no Grafana (tag `ajuste`) e conta em `termostato_acoes_total{tipo="ajuste"}`. O alvo aparece em `termostato_alvo_celsius`.
+- **Só mudam reiniciando:** `escuta`, `sysfs`, `estado`, `proc`, `docker_socket`, `dev_cpu`, `psi_*`, `tcc_offset_c` e `[grafana]`. A linha de comando os recusa.
+- Gravar exige root. Sem `sudo`, a resposta é "sem permissão, rode com sudo".
+
+## Ajustar de vez (o toml)
+
+Para valer sempre, edite o `/etc/termostato.toml` e reinicie:
 
 ```bash
 ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'
@@ -75,6 +95,9 @@ ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'
 | `janela_leituras` | 5 | Leituras na reta da tendência |
 | `previsao_s` | 10 | Quantos segundos à frente a previsão olha |
 | `subida_w_por_s` | 0,5 | Velocidade com que o PL1 volta ao normal; frear é na hora |
+| `alvo_c` | 0 | Alvo de temperatura (40 a 95 °C); 0 = sem alvo, só a curva. Atalho: `termostato CPU50C` |
+| `pl1_minimo_w` | 8 | O PL1 mais baixo a que o alvo pode levar |
+| `alvo_ganho_w_por_c_s` | 0,5 | Quanto o PL1 desce por segundo para cada °C acima do alvo |
 | `intervalo_s` | 2 | Segundos entre leituras |
 | `ventoinhas` | `"maximo"` | `"maximo"` ou `"automatico"` (o `applesmc` decide) |
 | `escuta` | `127.0.0.1:9101` | Onde o Prometheus lê |
@@ -94,7 +117,7 @@ ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'
 | `[maos] nunca` | sistema, SSH, Tailscale, Docker, monitoramento | Quem nunca é segurado |
 | `[grafana] url` / `token_arquivo` | tailnet / `/etc/termostato/grafana.token` | As anotações |
 
-**Passar as mãos para agir**, depois de ver o modo observar no painel ("O que o termostato fez", os tipos `_observado`): `[maos] modo = "agir"` no `/etc/termostato.toml` e reiniciar. Para voltar, `"observar"` e reiniciar: ao parar, ele devolve tudo o que estava segurando.
+**Passar as mãos para agir**, depois de ver o modo observar no painel ("O que o termostato fez", os tipos `_observado`): `sudo termostato maos.modo=agir`. Para voltar, `sudo termostato maos.modo=padrao`: ao sair do agir, ele devolve tudo o que estava segurando.
 
 **Zerar o histórico negativo:** `sudo systemctl stop termostato && sudo rm /var/lib/termostato/historico.json && sudo systemctl start termostato`.
 
@@ -104,6 +127,7 @@ A configuração é validada ao subir. Um campo com erro de digitação, freio a
 
 | Quero | Mude |
 |---|---|
+| A máquina fria agora, custe o desempenho | `sudo termostato CPU55C` |
 | Menos calor em carga longa | `pl1_normal_w = 30` (a medição mostrou o mesmo desempenho sustentado: ver [a máquina](maquina.md)) |
 | Frear mais cedo | `freio_comeca_c = 75` ou `previsao_s = 15` |
 | Previsão menos nervosa | `janela_leituras = 8` (reta por 16 s) |

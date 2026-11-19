@@ -82,6 +82,9 @@ fi
 %doc %{_docdir}/%{name}/CHANGELOG.md
 
 %changelog
+* Thu Nov 19 2026 Alex <alexkads@users.noreply.github.com> - 0.7.0-1
+- termostato chave=valor muda parâmetros com o serviço rodando; CPU50C segura a CPU num alvo de temperatura
+
 * Thu Nov 19 2026 Alex <alexkads@users.noreply.github.com> - 0.6.2-1
 - Modo observar anuncia uma vez cada cgroup e o devolveria com a calma, em vez de repetir a cada leitura
 

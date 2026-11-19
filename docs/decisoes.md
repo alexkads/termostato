@@ -119,3 +119,14 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 
 **Decisão.** O serviço sobe antes do `sysinit.target`, logo depois do udev, e antes do Docker, do k3s e da VM.
 **Por quê.** O firmware volta o PL1 aos 100 W a cada boot; em 19/11/2026 a CPU tocou 100 °C nos primeiros segundos, antes de o termostato assumir.
+
+## 23. Ajustes na hora, por um arquivo do estado
+
+**Contexto.** O dono pediu para passar parâmetros ao termostato, como `CPU50C`, e mudá-los para testar sem reiniciar o serviço.
+**Decisão.** `sudo termostato chave=valor …` grava os ajustes em `/var/lib/termostato/ajustes.toml`, que o serviço relê a cada volta e põe por cima do `/etc/termostato.toml`. `CPU50C` é o atalho de `alvo_c=50`.
+**Por quê.** Um arquivo só do root dispensa abrir porta de escrita no `/metrics`, que qualquer usuário local alcança. O pacote nunca toca o estado, então o ajuste sobrevive à atualização; e a mesma validação do toml roda antes de gravar e de novo ao ler.
+
+## 24. O alvo é integral, e não uma curva
+
+**Decisão.** O alvo de temperatura desce o PL1 em proporção ao erro e acumula, entre 8 W e o normal; vale o menor entre ele e a curva.
+**Por quê.** O PL1 que segura uma temperatura muda com a carga. O controle integral acha esse valor sem tabela, e a curva continua sendo a rede de segurança acima dele.

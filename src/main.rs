@@ -14,7 +14,11 @@
 //!
 //!   termostato [config]                 # o serviço
 //!   termostato --desinstalar [config]   # devolve a fábrica e apaga o estado
+//!   sudo termostato CPU50C              # ajustes com o serviço rodando
+//!   sudo termostato chave=valor …       # (ver `ajustes.rs`)
+//!   termostato ajustes                  # o que está em vigor
 
+mod ajustes;
 mod avisos;
 mod config;
 mod fabrica;
@@ -65,6 +69,15 @@ struct Estado {
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(pedido) = ajustes::interpretar(&args) {
+        let caminho = std::env::var_os("TERMOSTATO_CONFIG")
+            .map_or_else(|| PathBuf::from(CONFIG_PADRAO), PathBuf::from);
+        if let Err(e) = pedido.and_then(|p| atender(&caminho, p)) {
+            eprintln!("❌ {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let desinstalar = args.first().is_some_and(|a| a == "--desinstalar");
     if desinstalar {
         args.remove(0);
@@ -111,7 +124,26 @@ fn anunciar(cfg: &Config, achado: &Fabrica, ventoinhas: usize) {
 // (fábrica, sinais, HTTP, guardião, laço, parada segura).
 #[allow(clippy::too_many_lines)]
 fn rodar(caminho: &Path) -> Result<(), String> {
-    let cfg = Config::ler(caminho)?;
+    let base = Config::ler(caminho)?;
+    let estado_dir = PathBuf::from(&base.estado);
+    let mut ajustes_lidos = ajustes::texto(&estado_dir);
+    let mut ajustes_em_vigor = toml::Table::new();
+    let mut cfg = match ajustes::tabela(&ajustes_lidos)
+        .and_then(|t| ajustes::config_com(caminho, &t).map(|c| (t, c)))
+    {
+        Ok((t, c)) => {
+            for (k, v) in ajustes::achatar(&t) {
+                println!("🎛️ ajuste em vigor: {k} = {v}");
+            }
+            ajustes_em_vigor = t;
+            c
+        }
+        Err(e) => {
+            eprintln!("⚠️ ajustes ignorados: {e}");
+            base.clone()
+        }
+    };
+    let inicial = cfg.clone();
     let sysfs = PathBuf::from(&cfg.sysfs);
     let sensor = esperar_o_sensor(&sysfs)?;
     let mut rapl = match Rapl::achar(&sysfs) {
@@ -193,7 +225,6 @@ fn rodar(caminho: &Path) -> Result<(), String> {
 
     let mut freio = Freio::default();
     let mut retrato = Retrato::default();
-    let intervalo = Duration::from_secs_f64(cfg.intervalo_s);
     let mut anterior = Instant::now();
     let inicio = anterior;
 
@@ -204,6 +235,21 @@ fn rodar(caminho: &Path) -> Result<(), String> {
         retrato.leituras += 1;
 
         let agora_s = agora.duration_since(inicio).as_secs_f64();
+        let texto = ajustes::texto(&estado_dir);
+        if texto != ajustes_lidos {
+            ajustes_lidos = texto;
+            recarregar(
+                caminho,
+                &ajustes_lidos,
+                &inicial,
+                &mut ajustes_em_vigor,
+                &mut cfg,
+                &mut guardiao,
+                &mut retrato,
+            );
+        }
+        retrato.alvo_c = cfg.alvo_c;
+        retrato.ajustes = ajustes::achatar(&ajustes_em_vigor).len();
         match sensor.celsius() {
             Ok(t) => {
                 let prevista_processos = guardiao.antes_do_freio(agora_s, t, &cfg);
@@ -261,11 +307,116 @@ fn rodar(caminho: &Path) -> Result<(), String> {
             e.retrato = retrato.clone();
             e.ultima_leitura = Some(Instant::now());
         }
-        esperar(intervalo, &parar, kernel.alarme());
+        esperar(
+            Duration::from_secs_f64(cfg.intervalo_s),
+            &parar,
+            kernel.alarme(),
+        );
     }
 
     guardiao.parar();
     parar_seguro(rapl.as_ref(), &cfg);
+    Ok(())
+}
+
+/// O arquivo de ajustes mudou: confere, troca a config e avisa o que mudou.
+/// Ajuste inválido (alguém editou à mão) fica de fora, e vale o de antes.
+fn recarregar(
+    caminho: &Path,
+    texto: &str,
+    inicial: &Config,
+    em_vigor: &mut toml::Table,
+    cfg: &mut Config,
+    guardiao: &mut Guardiao,
+    retrato: &mut Retrato,
+) {
+    let lido =
+        ajustes::tabela(texto).and_then(|t| ajustes::config_com(caminho, &t).map(|c| (t, c)));
+    let (tabela, mut nova) = match lido {
+        Ok(par) => par,
+        Err(e) => {
+            let texto = format!("⚠️ ajustes recusados, sigo com os de antes: {e}");
+            eprintln!("{texto}");
+            retrato.contar("ajuste_recusado");
+            guardiao
+                .avisador()
+                .avisar(Aviso::novo(texto, &["ajuste", "recusado"]));
+            return;
+        }
+    };
+    for campo in ajustes::manter_os_da_subida(inicial, &mut nova) {
+        eprintln!("⚠️ {campo} só muda reiniciando o serviço: ignorado");
+    }
+    let mudou = ajustes::diferencas(em_vigor, &tabela);
+    if cfg.maos.modo == config::Modo::Agir && nova.maos.modo != config::Modo::Agir {
+        guardiao.soltar_as_maos();
+    }
+    *cfg = nova;
+    *em_vigor = tabela;
+    if mudou.is_empty() {
+        return;
+    }
+    retrato.contar("ajuste");
+    let texto = format!("🎛️ ajuste: {}", mudou.join(", "));
+    println!("{texto}");
+    guardiao.avisador().avisar(Aviso::novo(texto, &["ajuste"]));
+}
+
+/// `termostato CPU50C`, `chave=valor`, `ajustes`, `padrao`: grava o pedido no
+/// estado, para o serviço aplicar na próxima volta.
+fn atender(caminho: &Path, pedido: ajustes::Pedido) -> Result<(), String> {
+    let base = Config::ler(caminho)?;
+    let estado = PathBuf::from(&base.estado);
+    let atual = ajustes::tabela(&ajustes::texto(&estado))?;
+    let novo = match pedido {
+        ajustes::Pedido::Mostrar => {
+            let cfg = ajustes::config_com(caminho, &atual)?;
+            let lista = ajustes::achatar(&atual);
+            if lista.is_empty() {
+                println!("sem ajustes: vale só {}", caminho.display());
+            }
+            for (k, v) in lista {
+                println!("🎛️ {k} = {v}");
+            }
+            if cfg.alvo_c > 0.0 {
+                println!(
+                    "🎯 alvo: CPU em {} °C (PL1 entre {} e {} W)",
+                    cfg.alvo_c, cfg.pl1_minimo_w, cfg.pl1_normal_w
+                );
+            } else {
+                println!(
+                    "🎯 sem alvo: só a curva ({} °C → {} °C)",
+                    cfg.freio_comeca_c, cfg.freio_acima_c
+                );
+            }
+            return Ok(());
+        }
+        ajustes::Pedido::Limpar => toml::Table::new(),
+        ajustes::Pedido::Ajustar(pares) => {
+            let mut t = atual.clone();
+            for (k, v) in pares {
+                ajustes::aplicar(&mut t, &k, v);
+            }
+            t
+        }
+    };
+    let cfg = ajustes::config_com(caminho, &novo)?;
+    ajustes::gravar(&estado, &novo)?;
+    let mudou = ajustes::diferencas(&atual, &novo);
+    if mudou.is_empty() {
+        println!("nada mudou");
+    }
+    for linha in &mudou {
+        println!("🎛️ {linha}");
+    }
+    if cfg.alvo_c > 0.0 {
+        println!("🎯 alvo: CPU em {} °C", cfg.alvo_c);
+    }
+    println!(
+        "✅ gravado em {}: o serviço aplica em até {} s",
+        ajustes::arquivo(&estado).display(),
+        cfg.intervalo_s
+    );
     Ok(())
 }
 
@@ -301,6 +452,14 @@ fn registrar_o_freio(
     retrato.tendencia_c_s = Some(d.tendencia_c_s);
     retrato.freio_intensidade = d.intensidade;
     let texto = match d.mudanca {
+        Some(Mudanca::Acionou) if d.pelo_alvo => {
+            retrato.acionamentos += 1;
+            retrato.contar("freio_acionado");
+            format!(
+                "🎯 {t:.0} °C, acima do alvo de {} °C: freio acionado, PL1 em {:.1} W",
+                cfg.alvo_c, d.pl1_w
+            )
+        }
         Some(Mudanca::Acionou) => {
             retrato.acionamentos += 1;
             retrato.contar("freio_acionado");
@@ -425,6 +584,7 @@ fn devolver_a_fabrica(caminho: &Path) -> Result<(), String> {
         return Ok(());
     };
     devolver(&cfg, &f)?;
+    ajustes::apagar(&estado)?;
     fabrica::apagar(&estado)
 }
 

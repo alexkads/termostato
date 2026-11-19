@@ -302,6 +302,15 @@ impl Guardiao {
     }
 
     /// Ao parar: grava o histórico e devolve tudo o que está segurado.
+    /// O modo saiu de agir (um ajuste): devolve o que estava segurado.
+    pub fn soltar_as_maos(&mut self) {
+        for linha in maos::devolver_tudo(&self.executor, &mut self.segurados) {
+            println!("↩️ {linha}");
+        }
+        let _ = self.segurados.gravar(&self.estado);
+        self.simulados = Segurados::default();
+    }
+
     pub fn parar(&mut self) {
         let _ = self.historico.gravar(&self.estado);
         for linha in maos::devolver_tudo(&self.executor, &mut self.segurados) {
