@@ -89,10 +89,28 @@ impl Avisador {
     }
 }
 
+/// Esperas entre as tentativas de um aviso. O termostato sobe cedo no boot,
+/// antes da rede: os primeiros avisos esperam ela subir em vez de se perder
+/// (visto no primeiro boot do Fedora 45, em 19/11/2026: "Network is
+/// unreachable").
+const ESPERAS_S: [u64; 4] = [5, 15, 30, 60];
+
 fn enviar_sempre(fila: &Receiver<Aviso>, url: &str, token: &str) {
     for aviso in fila {
-        if let Err(e) = enviar(url, token, &aviso) {
-            eprintln!("⚠️ Grafana: {e} (o aviso fica só no journal)");
+        let mut tentativa = 0;
+        loop {
+            match enviar(url, token, &aviso) {
+                Ok(()) => break,
+                Err(e) if tentativa < ESPERAS_S.len() => {
+                    std::thread::sleep(std::time::Duration::from_secs(ESPERAS_S[tentativa]));
+                    tentativa += 1;
+                    let _ = e;
+                }
+                Err(e) => {
+                    eprintln!("⚠️ Grafana: {e} (o aviso fica só no journal)");
+                    break;
+                }
+            }
         }
     }
 }
@@ -196,8 +214,8 @@ mod testes {
     #[test]
     fn endereco_da_url() {
         assert_eq!(
-            endereco("http://100.110.180.47:3000").unwrap(),
-            "100.110.180.47:3000"
+            endereco("http://100.64.0.10:3000").unwrap(),
+            "100.64.0.10:3000"
         );
         assert_eq!(endereco("http://grafana").unwrap(), "grafana:80");
         assert!(endereco("https://x").is_err());

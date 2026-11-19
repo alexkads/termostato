@@ -5,21 +5,27 @@
 #
 #   ./desinstalar.sh
 #
-# É o único caminho que volta o PL1 aos 100 W do firmware: parar o serviço ou
-# um crash deixam os 38 W, de propósito.
+# A remoção do pacote (dnf remove) roda o `termostato --desinstalar`, que volta
+# o PL1 aos 100 W do firmware, e religa o thermald. É o único caminho que faz
+# isso: parar o serviço, atualizar ou um crash deixam o limite normal, de
+# propósito. Depois, tira o termostato do Prometheus e do Grafana desta máquina.
 set -euo pipefail
 MONITORAMENTO="${MONITORAMENTO:-$HOME/oficina/monitoramento}"
 
-sudo systemctl disable --now termostato.service >/dev/null 2>&1 || true
-if [ -x /usr/local/bin/termostato ]; then
-  sudo /usr/local/bin/termostato --desinstalar /etc/termostato.toml
+if rpm -q termostato >/dev/null 2>&1; then
+  sudo dnf remove -y -q termostato
+else
+  # Uma instalação à mão anterior ao pacote.
+  sudo systemctl disable --now termostato.service >/dev/null 2>&1 || true
+  if [ -x /usr/local/bin/termostato ]; then
+    sudo /usr/local/bin/termostato --desinstalar /etc/termostato.toml
+  fi
+  sudo rm -f /etc/systemd/system/termostato.service /usr/local/bin/termostato
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now thermald.service >/dev/null 2>&1 || true
 fi
-sudo rm -f /etc/systemd/system/termostato.service /usr/local/bin/termostato /etc/termostato.toml
-sudo rm -rf /var/lib/termostato
-sudo systemctl daemon-reload
-
-# O thermald volta a cuidar da CPU, como era antes.
-sudo systemctl enable --now thermald.service >/dev/null 2>&1 || true
+# O que sobra: a configuração ajustada (o rpm a guarda como .rpmsave) e o estado.
+sudo rm -rf /etc/termostato.toml /etc/termostato.toml.rpmsave /var/lib/termostato
 
 if [ -d "$MONITORAMENTO" ]; then
   rm -f "$MONITORAMENTO/grafana/dashboards/termostato.json" \
