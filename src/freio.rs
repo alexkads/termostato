@@ -7,6 +7,10 @@
 //!    (mínimos quadrados) dá a tendência em °C/s. Se ela sobe, a temperatura
 //!    prevista é a de agora mais a tendência vezes `previsao_s`. Se desce, vale
 //!    a de agora: esfriar não é motivo para soltar mais cedo.
+//!    Uma **terceira fonte** vem dos processos (`historico.rs`): quando um nome
+//!    do histórico negativo começa a gastar CPU, a temperatura prevista por ele
+//!    entra na conta, e a curva freia antes de o sensor reagir (o freio
+//!    **antecipado**).
 //! 2. **Curva.** O PL1 desejado sai de uma reta entre dois pontos: até
 //!    `freio_comeca_c` é o `pl1_normal_w`; em `freio_acima_c` ou mais, o
 //!    `pl1_freio_w`. A curva é aplicada à maior entre a temperatura de agora e
@@ -33,8 +37,12 @@ pub enum Mudanca {
 pub struct Decisao {
     /// Tendência da temperatura, em °C/s (negativa esfriando).
     pub tendencia_c_s: f64,
-    /// A temperatura prevista para daqui a `previsao_s`.
+    /// A temperatura prevista pela tendência, para daqui a `previsao_s`.
     pub prevista_c: f64,
+    /// A prevista pelos processos do histórico negativo, quando houver.
+    pub prevista_processos_c: Option<f64>,
+    /// A previsão pelos processos foi a maior das três: o freio veio antes.
+    pub antecipado: bool,
     /// O PL1 que vale agora, em watts.
     pub pl1_w: f64,
     /// 0 = limite normal; 1 = freio no máximo (`pl1_freio_w`).
@@ -89,7 +97,13 @@ impl Freio {
     }
 
     /// Uma leitura: `agora_s` em segundos desde a subida, `temperatura` em °C.
-    pub fn ler(&mut self, agora_s: f64, temperatura: f64, cfg: &Config) -> Decisao {
+    pub fn ler(
+        &mut self,
+        agora_s: f64,
+        temperatura: f64,
+        prevista_processos_c: Option<f64>,
+        cfg: &Config,
+    ) -> Decisao {
         let anterior = self.historico.back().map(|p| p.0);
         self.historico.push_back((agora_s, temperatura));
         while self.historico.len() > cfg.janela_leituras as usize {
@@ -99,7 +113,11 @@ impl Freio {
         let tendencia_c_s = tendencia(&self.historico);
         // Só a subida projeta: esfriando, vale a temperatura de agora.
         let prevista_c = temperatura + tendencia_c_s.max(0.0) * cfg.previsao_s;
-        let desejado = curva(temperatura.max(prevista_c), cfg);
+        let pela_temperatura = temperatura.max(prevista_c);
+        let maior = prevista_processos_c.map_or(pela_temperatura, |p| p.max(pela_temperatura));
+        let antecipado = prevista_processos_c.is_some_and(|p| p > pela_temperatura)
+            && curva(maior, cfg) < curva(pela_temperatura, cfg);
+        let desejado = curva(maior, cfg);
 
         let pl1_w = match (self.pl1_w, anterior) {
             (Some(atual), _) if desejado <= atual => desejado,
@@ -128,6 +146,8 @@ impl Freio {
         Decisao {
             tendencia_c_s,
             prevista_c,
+            prevista_processos_c,
+            antecipado,
             pl1_w,
             intensidade,
             mudanca,
@@ -175,9 +195,9 @@ mod testes {
         // freia, quando a regra antiga só agiria depois de 5 leituras a 92 °C.
         let c = cfg();
         let mut f = Freio::default();
-        let mut d = f.ler(0.0, 68.4, &c);
+        let mut d = f.ler(0.0, 68.4, None, &c);
         for (i, t) in [70.8, 73.2, 75.6, 78.0].into_iter().enumerate() {
-            d = f.ler(2.0 * (i + 1) as f64, t, &c);
+            d = f.ler(2.0 * (i + 1) as f64, t, None, &c);
         }
         assert!(quase(d.tendencia_c_s, 1.2));
         assert!(quase(d.prevista_c, 90.0));
@@ -190,7 +210,7 @@ mod testes {
         let c = cfg();
         let mut f = Freio::default();
         for i in 0..10 {
-            let d = f.ler(2.0 * f64::from(i), 75.0, &c);
+            let d = f.ler(2.0 * f64::from(i), 75.0, None, &c);
             assert!(quase(d.pl1_w, 38.0));
             assert_eq!(d.mudanca, None);
         }
@@ -200,7 +220,7 @@ mod testes {
     fn freia_na_hora_e_solta_devagar() {
         let c = cfg();
         let mut f = Freio::default();
-        let d = f.ler(0.0, 95.0, &c);
+        let d = f.ler(0.0, 95.0, None, &c);
         assert!(quase(d.pl1_w, 25.0));
         assert_eq!(d.mudanca, Some(Mudanca::Acionou));
         assert!(quase(d.intensidade, 1.0));
@@ -210,7 +230,7 @@ mod testes {
         let mut desligou_em = None;
         for _ in 0..20 {
             t += 2.0;
-            let d = f.ler(t, 60.0, &c);
+            let d = f.ler(t, 60.0, None, &c);
             assert!(d.pl1_w <= pl1 + 1.0 + 1e-9, "subiu rápido demais");
             pl1 = d.pl1_w;
             if d.mudanca == Some(Mudanca::Desligou) {
@@ -225,20 +245,42 @@ mod testes {
     fn calor_de_novo_no_meio_da_volta_freia_outra_vez() {
         let c = cfg();
         let mut f = Freio::default();
-        f.ler(0.0, 95.0, &c);
-        f.ler(2.0, 60.0, &c);
-        f.ler(4.0, 60.0, &c);
-        let d = f.ler(6.0, 93.0, &c);
+        f.ler(0.0, 95.0, None, &c);
+        f.ler(2.0, 60.0, None, &c);
+        f.ler(4.0, 60.0, None, &c);
+        let d = f.ler(6.0, 93.0, None, &c);
         assert!(quase(d.pl1_w, 25.0));
+    }
+
+    #[test]
+    fn processo_suspeito_freia_antes_de_o_sensor_reagir() {
+        let c = cfg();
+        let mut f = Freio::default();
+        for i in 0..4 {
+            f.ler(2.0 * f64::from(i), 60.0, None, &c);
+        }
+        // 60 °C e parada, mas o histórico diz que o rustc leva a 90 °C.
+        let d = f.ler(8.0, 60.0, Some(90.0), &c);
+        assert!(d.antecipado);
+        assert!(d.pl1_w < 30.0, "{}", d.pl1_w);
+        assert_eq!(d.mudanca, Some(Mudanca::Acionou));
+    }
+
+    #[test]
+    fn previsao_por_processos_mais_fria_nao_antecipa() {
+        let c = cfg();
+        let mut f = Freio::default();
+        let d = f.ler(0.0, 85.0, Some(70.0), &c);
+        assert!(!d.antecipado);
     }
 
     #[test]
     fn esfriando_nao_preve_para_baixo() {
         let c = cfg();
         let mut f = Freio::default();
-        let mut d = f.ler(0.0, 90.0, &c);
+        let mut d = f.ler(0.0, 90.0, None, &c);
         for (i, t) in [88.0, 86.0, 84.0].into_iter().enumerate() {
-            d = f.ler(2.0 * (i + 1) as f64, t, &c);
+            d = f.ler(2.0 * (i + 1) as f64, t, None, &c);
         }
         assert!(d.tendencia_c_s < 0.0);
         assert!(quase(d.prevista_c, 84.0));

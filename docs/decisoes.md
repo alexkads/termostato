@@ -88,3 +88,34 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 
 **Decisão.** `/metrics` em `127.0.0.1:9101`; o serviço roda como root com `ProtectSystem=strict`, gravando só em `/sys` e no próprio estado.
 **Por quê.** Escrever no RAPL e no SMC exige root. O resto do sistema fica só para leitura, e ninguém de fora lê as métricas.
+
+## 17. Os superpoderes começam observando
+
+**Decisão.** As mãos (segurar CPU e memória de processos e contêineres) vêm com o modo `observar` como padrão; agir é decisão do dono, depois de ver.
+**Por quê.** O dono: *"deve notificar o grafana o que ele está fazendo, pois pode ser nocivo para o ambiente"*. Segurar o Postgres de um e2e, por exemplo, pode estourar os prazos dos testes. O histórico do modo observar mostra o que aconteceria, sem risco.
+
+## 18. Segurar no cgroup em que o processo mora, e nunca matar
+
+**Decisão.** `cpu.max` e `memory.high` no cgroup do próprio processo; para contêiner, o pedido de CPU vai ao Docker. Nada de mover processos de cgroup, nada de `memory.max` nem de matar.
+**Por quê.** Mover processos confunde o systemd. O `memory.high` desacelera e força o processo a devolver memória, sem o OOM; matar é o último recurso do kernel e do `systemd-oomd`.
+
+## 19. Aprender por média móvel, com a nota que cai
+
+**Decisão.** A nota de calor é uma média móvel com peso pela fatia, e observações frias puxam a nota para baixo.
+**Por quê.** Uma regra fixa não se adapta. Se as aletas forem limpas e a mesma build passar a esquentar menos, as notas descem sozinhas, e o falso suspeito sai da lista sem intervenção.
+
+## 20. O TCC offset pelo driver `msr`
+
+**Contexto.** O driver próprio do kernel (`intel_tcc_cooling`) não atende o Haswell. O dono pediu para forçar o kernel a atendê-lo.
+**Decisão.** Gravar o `MSR 0x1A2` pelo driver genérico `msr`, com as conferências no termostato (programável, só os 6 bits, até 15 °C, leitura de volta). É uma exceção à decisão 6.
+**Por quê.** É a mesma gravação que o driver de TCC faria, sem um módulo próprio para recompilar a cada atualização de kernel. O custo é o kernel marcar a sessão como "tainted", um rótulo para relatórios de bug.
+
+## 21. Gatilho do kernel, e não só leitura
+
+**Decisão.** Inscrever um gatilho de pressão no PSI e esperar num `poll`, além da leitura a cada 2 s.
+**Por quê.** O sufoco de memória pode travar a máquina em segundos; o kernel acordando o termostato reage em milissegundos, sem gastar CPU na espera.
+
+## 22. Subir antes de todo mundo
+
+**Decisão.** O serviço sobe antes do `sysinit.target`, logo depois do udev, e antes do Docker, do k3s e da VM.
+**Por quê.** O firmware volta o PL1 aos 100 W a cada boot; em 19/11/2026 a CPU tocou 100 °C nos primeiros segundos, antes de o termostato assumir.

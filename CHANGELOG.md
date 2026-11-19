@@ -2,6 +2,24 @@
 
 Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs/decisoes.md) e a narrativa em [docs/historia.md](docs/historia.md).
 
+## 0.6.0: MegaBlaster, a conversa com o kernel e com o chip
+
+- **TCC offset:** o chip se freia sozinho a 92 °C (`MSR 0x1A2`, offset 8), gravado pelo driver `msr` do kernel, porque o `intel_tcc_cooling` não atende o Haswell. Mexe só nos 6 bits, recusa acima de 15 °C, confere lendo de novo, regrava a cada 30 s e volta a 0 no `--desinstalar`.
+- **Gatilho de pressão:** o kernel acorda o termostato quando a memória para 150 ms em 1 s (PSI trigger com `poll`).
+- Métricas do kernel: estrangulamento térmico, domínios do RAPL (`core`, `uncore`, `dram`) e os sensores do `applesmc`.
+- O serviço carrega o `msr` ao subir.
+
+## 0.5.0: os superpoderes
+
+- **Processos:** CPU e memória por nome e por cgroup, lidos do `/proc`.
+- **Histórico negativo:** nota de calor por processo, aprendida observando; o falso suspeito se corrige sozinho; em `historico.json`.
+- **Freio antecipado:** a previsão pelos suspeitos ativos entra na curva de freio.
+- **Pressão de memória** (PSI), memória disponível e swap.
+- **Mãos:** segurar CPU (`cpu.max`, ou o Docker pelos `NanoCpus`) e memória (`memory.high`) no cgroup de quem abusa, e devolver quando a máquina se acalma. Modo **observar** por padrão.
+- **Avisos:** cada ação vira anotação no Grafana, contador por tipo e e-mail quando as mãos agem.
+- Painel: Pressão de memória, Quem está gastando a CPU, Histórico negativo, O que o termostato fez e as marcas das anotações. Alertas: O termostato segurou um processo; Pressão de memória alta.
+- **Sobe cedo no boot**, antes do `sysinit.target`, do Docker, do k3s e da VM, e espera o sensor e as ventoinhas.
+
 ## 0.4.0: curva de freio com previsão do pico
 
 - O freio liga-desliga (5 leituras acima de 92 °C) virou uma **curva**: o PL1 desce em linha reta de 38 W em 80 °C até 25 W em 92 °C.

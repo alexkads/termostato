@@ -19,6 +19,117 @@ pub enum Ventoinhas {
     Automatico,
 }
 
+/// O que as mãos do termostato fazem com os processos e contêineres.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Modo {
+    /// Só registra o que faria: journal, métricas e anotação no Grafana.
+    Observar,
+    /// Segura de verdade, e devolve quando a máquina se acalma.
+    Agir,
+    /// Nem observa.
+    Desligado,
+}
+
+/// Os processos: observar quem gasta, aprender quem esquenta, antecipar.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ConfigProcessos {
+    /// Aprender quem esquenta e guardar no histórico.
+    pub aprender: bool,
+    /// Usar o histórico para frear antes de a temperatura reagir.
+    pub antecipar: bool,
+    /// Nota de calor (°C/s) a partir da qual o processo é suspeito.
+    pub suspeito_c_s: f64,
+    /// Observações de calor necessárias antes de virar suspeito.
+    pub minimo_de_observacoes: u32,
+    /// Fatia mínima da CPU da máquina (0 a 1) para contar.
+    pub fatia_minima: f64,
+    /// Nomes não vistos há mais dias que isto saem do histórico.
+    pub esquecer_dias: u64,
+    /// Nomes que nunca entram no histórico.
+    pub ignorar: Vec<String>,
+}
+
+impl Default for ConfigProcessos {
+    fn default() -> Self {
+        Self {
+            aprender: true,
+            antecipar: true,
+            suspeito_c_s: 1.0,
+            minimo_de_observacoes: 3,
+            fatia_minima: 0.05,
+            esquecer_dias: 30,
+            ignorar: vec!["termostato".into()],
+        }
+    }
+}
+
+/// As mãos: segurar CPU e memória dos mal-educados, no cgroup deles.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ConfigMaos {
+    pub modo: Modo,
+    /// Intensidade do freio de calor (0 a 1) a partir da qual segura a CPU.
+    pub cpu_a_partir_de: f64,
+    /// Nenhum cgroup fica com menos núcleos que isto.
+    pub minimo_cpus: f64,
+    /// Pressão de memória (PSI some avg10, %) que começa a segurar memória.
+    pub memoria_aperto_pct: f64,
+    /// Abaixo disto, por `calmo_s`, os limites voltam ao original.
+    pub memoria_folga_pct: f64,
+    /// Segundos de calma antes de devolver os limites.
+    pub calmo_s: f64,
+    /// Fatia mínima da CPU (0 a 1) para um cgroup ser segurado.
+    pub fatia_minima: f64,
+    /// Começos de cgroup ou nomes de contêiner que nunca são segurados.
+    pub nunca: Vec<String>,
+}
+
+impl Default for ConfigMaos {
+    fn default() -> Self {
+        Self {
+            modo: Modo::Observar,
+            cpu_a_partir_de: 0.3,
+            minimo_cpus: 1.0,
+            memoria_aperto_pct: 10.0,
+            memoria_folga_pct: 2.0,
+            calmo_s: 60.0,
+            fatia_minima: 0.2,
+            nunca: vec![
+                "/init.scope".into(),
+                "/system.slice/termostato.service".into(),
+                "/system.slice/sshd.service".into(),
+                "/system.slice/systemd-".into(),
+                "/system.slice/tailscaled.service".into(),
+                "/system.slice/docker.service".into(),
+                "/system.slice/containerd.service".into(),
+                "monitoramento-".into(),
+                "testcontainers-ryuk-".into(),
+            ],
+        }
+    }
+}
+
+/// Os avisos ao Grafana: uma anotação por intervenção.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ConfigGrafana {
+    /// Vazio = sem anotações (as métricas continuam).
+    pub url: String,
+    /// Arquivo com o token de uma conta de serviço do Grafana (modo 600).
+    pub token_arquivo: String,
+}
+
+impl Default for ConfigGrafana {
+    fn default() -> Self {
+        Self {
+            url: "http://100.110.180.47:3000".into(),
+            token_arquivo: "/etc/termostato/grafana.token".into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
@@ -47,9 +158,28 @@ pub struct Config {
     pub escuta: String,
     /// A raiz do sysfs. Só os testes mudam isto.
     pub sysfs: String,
-    /// Onde ficam os valores de fábrica (`fabrica.toml`), para o
-    /// `--desinstalar`. É o `StateDirectory` do serviço.
+    /// Onde ficam os valores de fábrica (`fabrica.toml`), o histórico e os
+    /// segurados. É o `StateDirectory` do serviço.
     pub estado: String,
+    /// A raiz do procfs. Só os testes mudam isto.
+    pub proc: String,
+    /// O socket do Docker, para saber o nome dos contêineres e pedir que maneirem.
+    pub docker_socket: String,
+    /// Onde o driver `msr` do kernel expõe os registros de cada CPU.
+    pub dev_cpu: String,
+    /// O TCC offset gravado no chip (°C abaixo do TjMax em que a própria CPU
+    /// se freia; 8 = 92 °C no i7-4770HQ). 0 deixa o de fábrica.
+    pub tcc_offset_c: u8,
+    /// O gatilho de pressão de memória no kernel: tempo parado (ms) dentro da
+    /// janela (ms) que acorda o termostato. 0 desliga o gatilho. O kernel aceita
+    /// janelas de 500 ms a 10 s. O kernel 7.3
+    /// do Fedora só aceita janelas em múltiplos de 2 s (1 s é recusado com
+    /// EINVAL mesmo como root, visto em 19/11/2026).
+    pub psi_parado_ms: u64,
+    pub psi_janela_ms: u64,
+    pub processos: ConfigProcessos,
+    pub maos: ConfigMaos,
+    pub grafana: ConfigGrafana,
 }
 
 impl Default for Config {
@@ -67,6 +197,15 @@ impl Default for Config {
             escuta: "127.0.0.1:9101".into(),
             sysfs: "/sys".into(),
             estado: "/var/lib/termostato".into(),
+            proc: "/proc".into(),
+            docker_socket: "/var/run/docker.sock".into(),
+            dev_cpu: "/dev/cpu".into(),
+            tcc_offset_c: 8,
+            psi_parado_ms: 150,
+            psi_janela_ms: 1000,
+            processos: ConfigProcessos::default(),
+            maos: ConfigMaos::default(),
+            grafana: ConfigGrafana::default(),
         }
     }
 }
@@ -134,6 +273,54 @@ impl Config {
                 self.intervalo_s
             ));
         }
+        if self.tcc_offset_c > crate::tcc::OFFSET_MAXIMO_C {
+            return Err(format!(
+                "tcc_offset_c = {} acima de {} °C",
+                self.tcc_offset_c,
+                crate::tcc::OFFSET_MAXIMO_C
+            ));
+        }
+        if self.psi_parado_ms > 0
+            && (self.psi_parado_ms >= self.psi_janela_ms
+                || !(500..=10_000).contains(&self.psi_janela_ms))
+        {
+            return Err(format!(
+                "psi_parado_ms ({}) precisa ser menor que psi_janela_ms ({}), e a janela entre 500 e 10.000 ms (o kernel recusa outras)",
+                self.psi_parado_ms, self.psi_janela_ms
+            ));
+        }
+        let p = &self.processos;
+        if p.suspeito_c_s <= 0.0 {
+            return Err(format!(
+                "processos.suspeito_c_s = {} precisa ser maior que 0",
+                p.suspeito_c_s
+            ));
+        }
+        if !(0.0..=1.0).contains(&p.fatia_minima) {
+            return Err(format!(
+                "processos.fatia_minima = {} fora de 0 a 1",
+                p.fatia_minima
+            ));
+        }
+        if p.minimo_de_observacoes == 0 {
+            return Err("processos.minimo_de_observacoes precisa ser pelo menos 1".into());
+        }
+        let m = &self.maos;
+        if !(0.0..=1.0).contains(&m.cpu_a_partir_de) || !(0.0..=1.0).contains(&m.fatia_minima) {
+            return Err("maos.cpu_a_partir_de e maos.fatia_minima ficam entre 0 e 1".into());
+        }
+        if m.minimo_cpus < 0.1 {
+            return Err(format!(
+                "maos.minimo_cpus = {} abaixo de 0,1 núcleo",
+                m.minimo_cpus
+            ));
+        }
+        if m.memoria_folga_pct >= m.memoria_aperto_pct {
+            return Err(format!(
+                "maos.memoria_folga_pct ({}) precisa ser menor que maos.memoria_aperto_pct ({})",
+                m.memoria_folga_pct, m.memoria_aperto_pct
+            ));
+        }
         Ok(())
     }
 }
@@ -189,6 +376,28 @@ mod testes {
         assert_eq!(c.janela_leituras, 5);
         assert!((c.freio_comeca_c - 80.0).abs() < f64::EPSILON);
         c.validar().unwrap();
+    }
+
+    #[test]
+    fn as_maos_comecam_observando() {
+        let c: Config = toml::from_str("").unwrap();
+        assert_eq!(c.maos.modo, Modo::Observar);
+        let c: Config = toml::from_str("[maos]\nmodo = \"agir\"").unwrap();
+        assert_eq!(c.maos.modo, Modo::Agir);
+        assert!(toml::from_str::<Config>("[maos]\nmodo = \"matar\"").is_err());
+    }
+
+    #[test]
+    fn superpoderes_invalidos_sao_recusados() {
+        let mut c = Config::default();
+        c.processos.suspeito_c_s = 0.0;
+        assert!(c.validar().is_err());
+        let mut c = Config::default();
+        c.maos.minimo_cpus = 0.05;
+        assert!(c.validar().is_err());
+        let mut c = Config::default();
+        c.maos.memoria_folga_pct = 20.0;
+        assert!(c.validar().is_err());
     }
 
     #[test]

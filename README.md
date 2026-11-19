@@ -4,6 +4,8 @@ Um serviço em Rust que cuida de todo o calor da **fedora** (`macpro-i7-alex`), 
 
 **A CPU nunca fica solta.** No dia a dia ela trabalha sob o **limite normal** de potência. Quando a temperatura sobe, ou quando a **previsão** mostra que vai subir, uma **curva de freio** aperta o limite antes do pico. As ventoinhas ficam no máximo, e tudo aparece no Grafana. A arrancada curta (o turbo até 3,4 GHz) continua livre: é ela que faz desse processador um foguetinho.
 
+Desde a 0.5, ele tem **superpoderes**: vê os processos e aprende quem costuma esquentar a máquina, freando **antes** quando eles aparecem; sente a pressão de memória (com o próprio kernel o acordando); segura no cgroup quem abusa (por padrão, só observando); grava no chip uma proteção que faz a **própria CPU se frear a 92 °C**; e avisa o Grafana de tudo o que faz. Ver [os superpoderes](docs/superpoderes.md).
+
 Não é preciso mexer no sistema operacional: tudo se ajusta num arquivo, o `/etc/termostato.toml`.
 
 ## Por que existe
@@ -64,6 +66,7 @@ A tabela completa, as receitas ("quero menos calor", "quero frear mais cedo") e 
 
 | Documento | Para quê |
 |---|---|
+| [Os superpoderes](docs/superpoderes.md) | Processos, histórico negativo, freio antecipado, memória, mãos, avisos ao Grafana, o kernel e o chip |
 | [Como funciona](docs/como-funciona.md) | O laço, a previsão, a curva, o caminho até o registro da CPU, a parada segura, os testes |
 | [Operação](docs/operacao.md) | Instalar, atualizar, ajustar, acompanhar, métricas, alertas, problemas conhecidos |
 | [A máquina](docs/maquina.md) | O hardware, os sensores, as medições e o teste com a build do VintageLightbox |

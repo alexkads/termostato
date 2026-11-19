@@ -24,6 +24,9 @@ pub struct Fabrica {
     pub pl1_uw: Option<u64>,
     #[serde(default)]
     pub pisos: Vec<Piso>,
+    /// O TCC offset de fábrica (0 quando não guardado: o chip liga com 0).
+    #[serde(default)]
+    pub tcc_offset_c: Option<u8>,
 }
 
 pub fn arquivo(estado: &Path) -> PathBuf {
@@ -53,6 +56,13 @@ pub fn guardar_se_faltar(estado: &Path, achado: &Fabrica) -> Result<bool, String
     Ok(true)
 }
 
+/// Regrava o arquivo (para acrescentar um valor que faltava, como o TCC).
+pub fn regravar(estado: &Path, f: &Fabrica) -> Result<(), String> {
+    let texto = toml::to_string(f).map_err(|e| e.to_string())?;
+    let caminho = arquivo(estado);
+    fs::write(&caminho, texto).map_err(|e| format!("{}: {e}", caminho.display()))
+}
+
 pub fn apagar(estado: &Path) -> Result<(), String> {
     let caminho = arquivo(estado);
     match fs::remove_file(&caminho) {
@@ -74,6 +84,7 @@ mod testes {
                 ventoinha: "1".into(),
                 rpm: 2160,
             }],
+            tcc_offset_c: None,
         }
     }
 
