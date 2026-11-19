@@ -19,13 +19,16 @@ mod avisos;
 mod config;
 mod fabrica;
 mod freio;
+mod gatilhos;
 mod guardiao;
 mod hardware;
 mod historico;
+mod kernel;
 mod maos;
 mod metricas;
 mod pressao;
 mod processos;
+mod tcc;
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -37,8 +40,10 @@ use std::time::{Duration, Instant};
 use avisos::{Avisador, Aviso};
 use config::{Config, Ventoinhas};
 use freio::{Freio, Mudanca};
+use gatilhos::Alarme;
 use guardiao::Guardiao;
 use hardware::{Rapl, Sensor, Ventoinha};
+use kernel::Kernel;
 use metricas::{Retrato, VentoinhaLida};
 
 const CONFIG_PADRAO: &str = "/etc/termostato.toml";
@@ -131,6 +136,7 @@ fn rodar(caminho: &Path) -> Result<(), String> {
                 })
             })
             .collect(),
+        tcc_offset_c: None,
     };
     anunciar(&cfg, &achado, ventoinhas.len());
     match fabrica::guardar_se_faltar(Path::new(&cfg.estado), &achado) {
@@ -163,6 +169,17 @@ fn rodar(caminho: &Path) -> Result<(), String> {
     let (avisador, sem_grafana) = Avisador::novo(&cfg.grafana);
     if let Some(motivo) = sem_grafana {
         eprintln!("⚠️ {motivo}");
+    }
+    let (mut kernel, tcc_de_antes) = Kernel::novo(&cfg, &avisador);
+    // O TCC offset de fábrica entra no arquivo só se ele ainda não existia.
+    if tcc_de_antes.is_some() {
+        let estado_dir = Path::new(&cfg.estado);
+        if let Ok(Some(mut f)) = fabrica::ler(estado_dir)
+            && f.tcc_offset_c.is_none()
+        {
+            f.tcc_offset_c = Some(0);
+            let _ = fabrica::regravar(estado_dir, &f);
+        }
     }
     let mut guardiao = Guardiao::novo(&cfg, avisador);
     guardiao.avisador().avisar(Aviso::novo(
@@ -238,12 +255,13 @@ fn rodar(caminho: &Path) -> Result<(), String> {
             })
             .collect();
         retrato.frequencia_mhz = hardware::frequencia_mhz(&sysfs);
+        kernel.a_cada_volta(agora_s, guardiao.avisador(), &mut retrato);
 
         if let Ok(mut e) = estado.lock() {
             e.retrato = retrato.clone();
             e.ultima_leitura = Some(Instant::now());
         }
-        esperar(intervalo, &parar);
+        esperar(intervalo, &parar, kernel.alarme());
     }
 
     guardiao.parar();
@@ -368,14 +386,18 @@ fn cuidar_da_ventoinha(v: &Ventoinha, retrato: &mut Retrato) {
 }
 
 /// Dorme o intervalo em fatias curtas, para o SIGTERM não esperar a volta toda.
-fn esperar(intervalo: Duration, parar: &AtomicBool) {
+fn esperar(intervalo: Duration, parar: &AtomicBool, alarme: Option<&Alarme>) {
     let fim = Instant::now() + intervalo;
     while !parar.load(Ordering::Relaxed) {
+        // O kernel avisou que a memória apertou: a próxima volta é agora.
+        if alarme.is_some_and(|a| a.tocou.load(Ordering::Relaxed)) {
+            break;
+        }
         let falta = fim.saturating_duration_since(Instant::now());
         if falta.is_zero() {
             break;
         }
-        std::thread::sleep(falta.min(Duration::from_millis(200)));
+        std::thread::sleep(falta.min(Duration::from_millis(100)));
     }
 }
 
@@ -402,11 +424,21 @@ fn devolver_a_fabrica(caminho: &Path) -> Result<(), String> {
         println!("sem valores de fábrica guardados: nada a devolver");
         return Ok(());
     };
-    devolver(&PathBuf::from(&cfg.sysfs), &f)?;
+    devolver(&cfg, &f)?;
     fabrica::apagar(&estado)
 }
 
-fn devolver(sysfs: &Path, f: &Fabrica) -> Result<(), String> {
+fn devolver(cfg: &Config, f: &Fabrica) -> Result<(), String> {
+    let sysfs = &PathBuf::from(&cfg.sysfs);
+    if let Some(o) = f.tcc_offset_c {
+        match tcc::Msr::achar(Path::new(&cfg.dev_cpu)).and_then(|m| m.definir_offset(o)) {
+            Ok(tjmax) => println!(
+                "↩️ TCC offset devolvido a {o} °C: o chip volta a se frear só a {} °C",
+                tjmax.saturating_sub(o)
+            ),
+            Err(e) => eprintln!("⚠️ não devolvi o TCC offset: {e} (ele volta a 0 no próximo boot)"),
+        }
+    }
     if let Some(uw) = f.pl1_uw {
         Rapl::achar(sysfs)?.definir_pl1_uw(uw)?;
         println!("↩️ PL1 devolvido a {} W", uw_para_w(uw));
@@ -539,6 +571,7 @@ mod testes {
                 ventoinha: "1".into(),
                 rpm: 2000,
             }],
+            tcc_offset_c: None,
         };
         fabrica::guardar_se_faltar(est.path(), &f).unwrap();
         let toml = est.path().join("t.toml");

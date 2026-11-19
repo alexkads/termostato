@@ -165,6 +165,18 @@ pub struct Config {
     pub proc: String,
     /// O socket do Docker, para saber o nome dos contêineres e pedir que maneirem.
     pub docker_socket: String,
+    /// Onde o driver `msr` do kernel expõe os registros de cada CPU.
+    pub dev_cpu: String,
+    /// O TCC offset gravado no chip (°C abaixo do TjMax em que a própria CPU
+    /// se freia; 8 = 92 °C no i7-4770HQ). 0 deixa o de fábrica.
+    pub tcc_offset_c: u8,
+    /// O gatilho de pressão de memória no kernel: tempo parado (ms) dentro da
+    /// janela (ms) que acorda o termostato. 0 desliga o gatilho. O kernel aceita
+    /// janelas de 500 ms a 10 s. O kernel 7.3
+    /// do Fedora só aceita janelas em múltiplos de 2 s (1 s é recusado com
+    /// EINVAL mesmo como root, visto em 19/11/2026).
+    pub psi_parado_ms: u64,
+    pub psi_janela_ms: u64,
     pub processos: ConfigProcessos,
     pub maos: ConfigMaos,
     pub grafana: ConfigGrafana,
@@ -187,6 +199,10 @@ impl Default for Config {
             estado: "/var/lib/termostato".into(),
             proc: "/proc".into(),
             docker_socket: "/var/run/docker.sock".into(),
+            dev_cpu: "/dev/cpu".into(),
+            tcc_offset_c: 8,
+            psi_parado_ms: 150,
+            psi_janela_ms: 1000,
             processos: ConfigProcessos::default(),
             maos: ConfigMaos::default(),
             grafana: ConfigGrafana::default(),
@@ -255,6 +271,22 @@ impl Config {
             return Err(format!(
                 "intervalo_s = {} fora de 0,5 a 60 s",
                 self.intervalo_s
+            ));
+        }
+        if self.tcc_offset_c > crate::tcc::OFFSET_MAXIMO_C {
+            return Err(format!(
+                "tcc_offset_c = {} acima de {} °C",
+                self.tcc_offset_c,
+                crate::tcc::OFFSET_MAXIMO_C
+            ));
+        }
+        if self.psi_parado_ms > 0
+            && (self.psi_parado_ms >= self.psi_janela_ms
+                || !(500..=10_000).contains(&self.psi_janela_ms))
+        {
+            return Err(format!(
+                "psi_parado_ms ({}) precisa ser menor que psi_janela_ms ({}), e a janela entre 500 e 10.000 ms (o kernel recusa outras)",
+                self.psi_parado_ms, self.psi_janela_ms
             ));
         }
         let p = &self.processos;

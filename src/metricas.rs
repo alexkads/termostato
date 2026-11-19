@@ -54,6 +54,17 @@ pub struct Retrato {
     pub freio_antecipado: bool,
     /// Quantas vezes cada ação aconteceu.
     pub acoes: BTreeMap<String, u64>,
+    /// O TCC offset em vigor no chip e o TjMax.
+    pub tcc_offset_c: Option<u8>,
+    pub tjmax_c: Option<u8>,
+    /// Quantas vezes o gatilho de pressão do kernel acordou o termostato.
+    pub kernel_avisos: u64,
+    /// Estrangulamento térmico desde o boot: (pacote, soma dos núcleos).
+    pub estrangulamento: Option<(u64, u64)>,
+    /// Potência dos domínios do RAPL além do pacote (core, uncore, dram).
+    pub dominios_w: Vec<(String, f64)>,
+    /// Os sensores do applesmc.
+    pub sensores_do_mac: Vec<(String, f64)>,
 }
 
 /// Escapa um valor de rótulo do Prometheus.
@@ -75,6 +86,94 @@ fn valor(saida: &mut String, nome: &str, rotulos: &str, v: f64) {
 impl Retrato {
     pub fn contar(&mut self, acao: &str) {
         *self.acoes.entry(acao.to_string()).or_default() += 1;
+    }
+
+    fn do_kernel(&self, s: &mut String) {
+        if let (Some(o), Some(tj)) = (self.tcc_offset_c, self.tjmax_c) {
+            metrica(
+                s,
+                "termostato_tcc_corte_celsius",
+                "gauge",
+                "Temperatura em que o próprio chip se freia (TjMax menos o TCC offset).",
+            );
+            valor(
+                s,
+                "termostato_tcc_corte_celsius",
+                "",
+                f64::from(tj.saturating_sub(o)),
+            );
+            metrica(
+                s,
+                "termostato_tcc_offset_celsius",
+                "gauge",
+                "TCC offset gravado no chip (MSR 0x1A2).",
+            );
+            valor(s, "termostato_tcc_offset_celsius", "", f64::from(o));
+        }
+        metrica(
+            s,
+            "termostato_kernel_avisos_total",
+            "counter",
+            "Vezes que o gatilho de pressão do kernel acordou o termostato.",
+        );
+        valor(
+            s,
+            "termostato_kernel_avisos_total",
+            "",
+            self.kernel_avisos as f64,
+        );
+        if let Some((pacote, nucleos)) = self.estrangulamento {
+            metrica(
+                s,
+                "termostato_estrangulamento_total",
+                "counter",
+                "Estrangulamentos térmicos do chip desde o boot, pelo kernel.",
+            );
+            valor(
+                s,
+                "termostato_estrangulamento_total",
+                "{onde=\"pacote\"}",
+                pacote as f64,
+            );
+            valor(
+                s,
+                "termostato_estrangulamento_total",
+                "{onde=\"nucleos\"}",
+                nucleos as f64,
+            );
+        }
+        if !self.dominios_w.is_empty() {
+            metrica(
+                s,
+                "termostato_dominio_watts",
+                "gauge",
+                "Potência de cada domínio do RAPL: core (núcleos), uncore (gráfico e resto do chip), dram (memória).",
+            );
+            for (d, w) in &self.dominios_w {
+                valor(
+                    s,
+                    "termostato_dominio_watts",
+                    &format!("{{dominio=\"{}\"}}", rotulo(d)),
+                    *w,
+                );
+            }
+        }
+        if !self.sensores_do_mac.is_empty() {
+            metrica(
+                s,
+                "termostato_sensor_celsius",
+                "gauge",
+                "Sensores de temperatura do applesmc, pela chave do SMC (TC0P = CPU, TG0P = GPU, Ts0P = apoio de mãos, TH0* = aletas, TB*T = bateria).",
+            );
+            for (n, c) in &self.sensores_do_mac {
+                valor(
+                    s,
+                    "termostato_sensor_celsius",
+                    &format!("{{sensor=\"{}\"}}", rotulo(n)),
+                    *c,
+                );
+            }
+        }
     }
 
     // Outra lista corrida, como a de `em_texto`.
@@ -178,6 +277,7 @@ impl Retrato {
                 *nota,
             );
         }
+        self.do_kernel(s);
         metrica(
             s,
             "termostato_freio_antecipado",
