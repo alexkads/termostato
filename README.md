@@ -40,10 +40,11 @@ Uma configuração inválida (campo com erro de digitação, freio acima do norm
 
 ## Instalar ou atualizar
 
-Na fedora, no clone `~/oficina/repos/termostato`:
+O `gh` da fedora não tem token, então o código vai do Mac para o clone `~/oficina/repos/termostato`, e o instalador roda lá:
 
 ```bash
-git pull && ./instalar.sh
+rsync -a --delete --exclude target ~/Projects/termostato/ fedora:oficina/repos/termostato/
+ssh fedora 'cd ~/oficina/repos/termostato && ./instalar.sh'
 ```
 
 O `instalar.sh`:
