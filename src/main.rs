@@ -76,13 +76,16 @@ fn anunciar(cfg: &Config, achado: &Fabrica, ventoinhas: usize) {
         Ventoinhas::Automatico => "automático",
     };
     println!(
-        "🌡️ termostato {} · PL1 {} W (achado {achado} W), freio {} W a partir de {} °C por {} leituras, solta abaixo de {} °C · ventoinhas: {modo} ({ventoinhas}) · métricas em http://{}/metrics",
+        "🌡️ termostato {} · limite normal PL1 {} W (achado {achado} W) · curva de freio: {} °C → {} W até {} °C → {} W, previsão de {} s sobre {} leituras, solta a {} W/s · ventoinhas: {modo} ({ventoinhas}) · métricas em http://{}/metrics",
         env!("CARGO_PKG_VERSION"),
         cfg.pl1_normal_w,
-        cfg.pl1_freio_w,
+        cfg.freio_comeca_c,
+        cfg.pl1_normal_w,
         cfg.freio_acima_c,
-        cfg.leituras_para_frear,
-        cfg.solta_abaixo_c,
+        cfg.pl1_freio_w,
+        cfg.previsao_s,
+        cfg.janela_leituras,
+        cfg.subida_w_por_s,
         cfg.escuta,
     );
 }
@@ -144,6 +147,7 @@ fn rodar(caminho: &Path) -> Result<(), String> {
     let mut retrato = Retrato::default();
     let intervalo = Duration::from_secs_f64(cfg.intervalo_s);
     let mut anterior = Instant::now();
+    let inicio = anterior;
 
     while !parar.load(Ordering::Relaxed) {
         let agora = Instant::now();
@@ -151,11 +155,12 @@ fn rodar(caminho: &Path) -> Result<(), String> {
         anterior = agora;
         retrato.leituras += 1;
 
-        ler_a_temperatura(&sensor, &mut freio, &cfg, &mut retrato);
-        if freio.puxado() {
-            retrato.segundos_freado += dt;
+        let agora_s = agora.duration_since(inicio).as_secs_f64();
+        ler_a_temperatura(&sensor, &mut freio, agora_s, &cfg, &mut retrato);
+        if freio.acionado() {
+            retrato.segundos_acionado += dt;
         }
-        retrato.freio_puxado = freio.puxado();
+        retrato.freio_acionado = freio.acionado();
         retrato.pl1_alvo_w = freio.pl1_w(&cfg);
 
         if let Some(r) = rapl.as_mut() {
@@ -189,20 +194,30 @@ fn rodar(caminho: &Path) -> Result<(), String> {
 }
 
 /// Uma leitura do sensor, passada ao freio.
-fn ler_a_temperatura(sensor: &Sensor, freio: &mut Freio, cfg: &Config, retrato: &mut Retrato) {
+fn ler_a_temperatura(
+    sensor: &Sensor,
+    freio: &mut Freio,
+    agora_s: f64,
+    cfg: &Config,
+    retrato: &mut Retrato,
+) {
     match sensor.celsius() {
         Ok(t) => {
             retrato.temperatura_c = Some(t);
-            match freio.ler(t, cfg) {
-                Some(Mudanca::Puxou) => {
-                    retrato.freadas += 1;
+            let d = freio.ler(agora_s, t, cfg);
+            retrato.temperatura_prevista_c = Some(d.prevista_c);
+            retrato.tendencia_c_s = Some(d.tendencia_c_s);
+            retrato.freio_intensidade = d.intensidade;
+            match d.mudanca {
+                Some(Mudanca::Acionou) => {
+                    retrato.acionamentos += 1;
                     println!(
-                        "🔥 {t} °C por {} leituras: freio puxado, PL1 em {} W",
-                        cfg.leituras_para_frear, cfg.pl1_freio_w
+                        "🔥 {t:.0} °C agora, {:.0} °C previstos em {} s ({:+.1} °C/s): freio de calor acionado, PL1 em {:.1} W",
+                        d.prevista_c, cfg.previsao_s, d.tendencia_c_s, d.pl1_w
                     );
                 }
-                Some(Mudanca::Soltou) => println!(
-                    "❄️ {t} °C: freio solto, PL1 de volta a {} W",
+                Some(Mudanca::Desligou) => println!(
+                    "❄️ {t:.0} °C: freio de calor desligado, de volta ao limite normal de {} W",
                     cfg.pl1_normal_w
                 ),
                 None => {}
@@ -283,7 +298,7 @@ fn esperar(intervalo: Duration, parar: &AtomicBool) {
     }
 }
 
-/// Ao parar: o PL1 vai ao valor seguro (se o freio estava puxado, sai dos
+/// Ao parar: o PL1 vai ao valor seguro (se o freio estava acionado, sai dos
 /// 25 W) e as ventoinhas ficam como estão. Nada volta à fábrica aqui.
 fn parar_seguro(rapl: Option<&Rapl>, cfg: &Config) {
     if let Some(r) = rapl
@@ -416,7 +431,7 @@ mod testes {
         let d = tempfile::tempdir().unwrap();
         hardware::sysfs_de_teste::montar(d.path(), 95);
         let r = Rapl::achar(d.path()).unwrap();
-        // O freio estava puxado (25 W) quando o SIGTERM chegou.
+        // O freio estava acionado (25 W) quando o SIGTERM chegou.
         r.definir_pl1_uw(25_000_000).unwrap();
         parar_seguro(Some(&r), &Config::default());
         assert_eq!(

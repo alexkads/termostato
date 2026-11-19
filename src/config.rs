@@ -25,15 +25,21 @@ pub struct Config {
     /// Limite de potência sustentada (RAPL PL1) no dia a dia, em watts. O
     /// firmware da Apple deixa 100 W, que na prática é sem limite.
     pub pl1_normal_w: f64,
-    /// O PL1 enquanto o freio estiver puxado.
+    /// O PL1 com o freio no máximo: o fim da curva.
     pub pl1_freio_w: f64,
-    /// Temperatura do pacote que conta como "quente" para o freio.
+    /// Temperatura (de agora ou prevista) em que a curva começa a frear.
+    // Os nomes da 0.3 continuam aceitos: o /etc/termostato.toml instalado os usa.
+    #[serde(alias = "desliga_abaixo_c", alias = "solta_abaixo_c")]
+    pub freio_comeca_c: f64,
+    /// Temperatura (de agora ou prevista) em que o freio chega ao máximo.
     pub freio_acima_c: f64,
-    /// Abaixo desta, o freio solta. A distância evita ligar e desligar a cada
-    /// leitura em volta de um limite só.
-    pub solta_abaixo_c: f64,
-    /// Quantas leituras quentes seguidas puxam o freio.
-    pub leituras_para_frear: u32,
+    /// Quantas leituras entram na reta da tendência.
+    #[serde(alias = "leituras_para_frear")]
+    pub janela_leituras: u32,
+    /// Quantos segundos à frente a previsão olha.
+    pub previsao_s: f64,
+    /// Quanto o PL1 sobe por segundo ao soltar o freio. Frear é na hora.
+    pub subida_w_por_s: f64,
     /// Intervalo entre leituras, em segundos.
     pub intervalo_s: f64,
     pub ventoinhas: Ventoinhas,
@@ -51,9 +57,11 @@ impl Default for Config {
         Self {
             pl1_normal_w: 38.0,
             pl1_freio_w: 25.0,
+            freio_comeca_c: 80.0,
             freio_acima_c: 92.0,
-            solta_abaixo_c: 80.0,
-            leituras_para_frear: 5,
+            janela_leituras: 5,
+            previsao_s: 10.0,
+            subida_w_por_s: 0.5,
             intervalo_s: 2.0,
             ventoinhas: Ventoinhas::Maximo,
             escuta: "127.0.0.1:9101".into(),
@@ -90,10 +98,10 @@ impl Config {
                 self.pl1_freio_w, self.pl1_normal_w
             ));
         }
-        if self.solta_abaixo_c >= self.freio_acima_c {
+        if self.freio_comeca_c >= self.freio_acima_c {
             return Err(format!(
-                "solta_abaixo_c ({}) precisa ser menor que freio_acima_c ({})",
-                self.solta_abaixo_c, self.freio_acima_c
+                "freio_comeca_c ({}) precisa ser menor que freio_acima_c ({})",
+                self.freio_comeca_c, self.freio_acima_c
             ));
         }
         if self.freio_acima_c > 99.0 {
@@ -102,8 +110,23 @@ impl Config {
                 self.freio_acima_c
             ));
         }
-        if self.leituras_para_frear == 0 {
-            return Err("leituras_para_frear precisa ser pelo menos 1".into());
+        if !(2..=60).contains(&self.janela_leituras) {
+            return Err(format!(
+                "janela_leituras = {} fora de 2 a 60",
+                self.janela_leituras
+            ));
+        }
+        if !(0.0..=120.0).contains(&self.previsao_s) {
+            return Err(format!(
+                "previsao_s = {} fora de 0 a 120 s",
+                self.previsao_s
+            ));
+        }
+        if !(0.05..=50.0).contains(&self.subida_w_por_s) {
+            return Err(format!(
+                "subida_w_por_s = {} fora de 0,05 a 50 W/s",
+                self.subida_w_por_s
+            ));
         }
         if !(0.5..=60.0).contains(&self.intervalo_s) {
             return Err(format!(
@@ -149,12 +172,23 @@ mod testes {
     }
 
     #[test]
-    fn histerese_invertida_e_recusada() {
+    fn curva_invertida_e_recusada() {
         let c = Config {
-            solta_abaixo_c: 95.0,
+            freio_comeca_c: 95.0,
             ..Config::default()
         };
         assert!(c.validar().is_err());
+    }
+
+    #[test]
+    fn arquivo_da_versao_anterior_continua_valendo() {
+        let c: Config = toml::from_str(
+            "pl1_normal_w = 38\npl1_freio_w = 25\nfreio_acima_c = 92\nleituras_para_frear = 5\nsolta_abaixo_c = 80",
+        )
+        .unwrap();
+        assert_eq!(c.janela_leituras, 5);
+        assert!((c.freio_comeca_c - 80.0).abs() < f64::EPSILON);
+        c.validar().unwrap();
     }
 
     #[test]
