@@ -2,6 +2,10 @@
 
 Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs/decisoes.md) e a narrativa em [docs/historia.md](docs/historia.md).
 
+## 0.6.2: o observar sem repetir
+
+- No modo observar, as mãos simulam o estado: cada cgroup é anunciado **uma vez** ("seguraria") e de novo só ao se acalmar ("devolveria"), como o modo agir faria. Antes, cada leitura decidia de novo segurar o mesmo cgroup: foram 931 anotações iguais no Grafana em 19/11/2026.
+
 ## 0.6.1: o Fedora 45
 
 - O termostato roda no **Fedora 45** (kernel 7.3.4-300.fc45), pelo pacote gerado lá.
