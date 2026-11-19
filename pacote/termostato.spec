@@ -82,6 +82,10 @@ fi
 %doc %{_docdir}/%{name}/CHANGELOG.md
 
 %changelog
+* Thu Nov 19 2026 Alex <alexkads@users.noreply.github.com> - 0.6.1-1
+- Avisos ao Grafana esperam a rede subir no boot em vez de se perder
+- Primeiro pacote gerado no Fedora 45
+
 * Thu Nov 19 2026 Alex <alexkads@users.noreply.github.com> - 0.6.0-1
 - MegaBlaster: TCC offset no chip (a CPU se freia sozinha a 92 °C), gatilho de
   pressão de memória do kernel, estrangulamento, domínios do RAPL e sensores do Mac

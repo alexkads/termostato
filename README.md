@@ -36,10 +36,10 @@ Fora o que o termostato faz em tempo de execução, a fedora fica no padrão do 
 
 ## Começo rápido
 
-O termostato é instalado por um **pacote RPM** (Fedora 44, x86_64), anexado a cada [Release](https://github.com/alexkads/termostato/releases):
+O termostato é instalado por um **pacote RPM** (Fedora 45, x86_64), anexado a cada [Release](https://github.com/alexkads/termostato/releases):
 
 ```bash
-sudo dnf install https://github.com/alexkads/termostato/releases/download/v0.6.0/termostato-0.6.0-1.fc44.x86_64.rpm
+sudo dnf install https://github.com/alexkads/termostato/releases/download/v0.6.1/termostato-0.6.1-1.fc45.x86_64.rpm
 ```
 
 Na primeira instalação, o pacote liga o serviço (no `sysinit`, antes do Docker, do k3s e da VM), desliga o `thermald` e volta o perfil de energia ao `balanced`. Numa atualização, só reinicia o serviço; o `/etc/termostato.toml` ajustado nunca é trocado. Remover (`sudo dnf remove termostato`) devolve a fábrica: PL1 100 W, TCC offset 0, pisos das ventoinhas, e religa o `thermald`.

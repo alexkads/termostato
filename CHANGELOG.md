@@ -2,6 +2,11 @@
 
 Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs/decisoes.md) e a narrativa em [docs/historia.md](docs/historia.md).
 
+## 0.6.1: o Fedora 45
+
+- O termostato roda no **Fedora 45** (kernel 7.3.4-300.fc45), pelo pacote gerado lá.
+- Os avisos ao Grafana esperam a rede subir no boot (5, 15, 30 e 60 s) em vez de se perder: o serviço sobe antes da rede.
+
 ## 0.6.0: MegaBlaster, a conversa com o kernel e com o chip
 
 - **Pacote RPM** (`pacote/termostato.spec`), publicado no Release `v0.6.0`: primeira instalação liga o serviço, desliga o `thermald` e volta o perfil ao `balanced`; atualização só reinicia; remoção devolve a fábrica. O `instalar.sh` e o `desinstalar.sh` passam a usar o `dnf`.

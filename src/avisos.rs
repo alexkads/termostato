@@ -89,10 +89,28 @@ impl Avisador {
     }
 }
 
+/// Esperas entre as tentativas de um aviso. O termostato sobe cedo no boot,
+/// antes da rede: os primeiros avisos esperam ela subir em vez de se perder
+/// (visto no primeiro boot do Fedora 45, em 19/11/2026: "Network is
+/// unreachable").
+const ESPERAS_S: [u64; 4] = [5, 15, 30, 60];
+
 fn enviar_sempre(fila: &Receiver<Aviso>, url: &str, token: &str) {
     for aviso in fila {
-        if let Err(e) = enviar(url, token, &aviso) {
-            eprintln!("⚠️ Grafana: {e} (o aviso fica só no journal)");
+        let mut tentativa = 0;
+        loop {
+            match enviar(url, token, &aviso) {
+                Ok(()) => break,
+                Err(e) if tentativa < ESPERAS_S.len() => {
+                    std::thread::sleep(std::time::Duration::from_secs(ESPERAS_S[tentativa]));
+                    tentativa += 1;
+                    let _ = e;
+                }
+                Err(e) => {
+                    eprintln!("⚠️ Grafana: {e} (o aviso fica só no journal)");
+                    break;
+                }
+            }
         }
     }
 }
