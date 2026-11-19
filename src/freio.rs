@@ -21,8 +21,8 @@
 //!    soltando aos poucos, sem o efeito sanfona.
 //!
 //! **O alvo** (`alvo_c`, ou `sudo termostato CPU50C`): além da curva, um
-//! controle integral segura a CPU numa temperatura. Acima do alvo (de agora ou
-//! prevista), o PL1 do alvo desce `alvo_ganho_w_por_c_s` × °C de erro por
+//! controle integral segura a CPU numa temperatura. Acima do alvo (a de agora:
+//! a previsão é da curva), o PL1 do alvo desce `alvo_ganho_w_por_c_s` × °C de erro por
 //! segundo; abaixo, sobe no máximo `subida_w_por_s`. Fica entre o
 //! `pl1_minimo_w` e o `pl1_normal_w`, e vale o menor entre ele e a curva.
 
@@ -129,7 +129,11 @@ impl Freio {
             && curva(maior, cfg) < curva(pela_temperatura, cfg);
         let pela_curva = curva(maior, cfg);
         let dt = anterior.map_or(0.0, |antes| (agora_s - antes).max(0.0));
-        let do_alvo = self.seguir_o_alvo(pela_temperatura, dt, cfg);
+        // O alvo olha a temperatura de agora: a previsão fica para a curva, a
+        // guarda do pico. Com ela, os picos curtos do Haswell assustavam o
+        // controle (visto em 19/11/2026: com previsão, 57–66 °C e o PL1 caindo
+        // a 8 W num tranco; sem, 60–69 °C em volta de 65 e o PL1 em 14–21 W).
+        let do_alvo = self.seguir_o_alvo(temperatura, dt, cfg);
         let pelo_alvo = do_alvo.is_some_and(|p| p < pela_curva);
         let desejado = do_alvo.map_or(pela_curva, |p| p.min(pela_curva));
 
@@ -414,5 +418,19 @@ mod testes {
         let d = f.ler(40.0, 60.0, None, &c);
         assert!(quase(d.pl1_w, c.pl1_minimo_w + 1.0), "{}", d.pl1_w);
         assert!(!d.pelo_alvo);
+    }
+
+    #[test]
+    fn o_alvo_nao_se_assusta_com_a_previsao() {
+        // Subindo rápido mas ainda abaixo do alvo: a curva não freia (abaixo de
+        // 80 °C mesmo prevista) e o alvo olha a de agora, então o PL1 fica.
+        let c = com_alvo(65.0);
+        let mut f = Freio::default();
+        let mut d = f.ler(0.0, 56.0, None, &c);
+        for (i, t) in [58.0, 60.0, 62.0, 64.0].into_iter().enumerate() {
+            d = f.ler(2.0 * (i + 1) as f64, t, None, &c);
+        }
+        assert!(d.prevista_c > 70.0, "a previsão sobe: {}", d.prevista_c);
+        assert!(quase(d.pl1_w, 38.0), "{}", d.pl1_w);
     }
 }
