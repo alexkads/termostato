@@ -6,13 +6,20 @@
 # sobrar folga. O turbo curto (PL2, 125 W) fica livre: a arrancada não muda.
 pl1_normal_w = 38
 
-# O freio de calor: com a CPU em `freio_acima_c` ou mais por
-# `leituras_para_frear` leituras seguidas, o PL1 cai para `pl1_freio_w`. Ele
-# só solta abaixo de `solta_abaixo_c`.
+# A curva de freio, com previsão do pico. A CPU nunca fica solta: sem calor,
+# vale o pl1_normal_w. A cada leitura, uma reta pelas últimas `janela_leituras`
+# temperaturas prevê onde a CPU estará daqui a `previsao_s`; o PL1 sai da curva
+# aplicada à maior entre a de agora e a prevista:
+#   até `freio_comeca_c`            → pl1_normal_w
+#   entre os dois, em linha reta     → do normal até o freio
+#   a partir de `freio_acima_c`     → pl1_freio_w
+# Frear é na hora; soltar sobe no máximo `subida_w_por_s` watts por segundo.
 pl1_freio_w = 25
+freio_comeca_c = 80
 freio_acima_c = 92
-leituras_para_frear = 5
-solta_abaixo_c = 80
+janela_leituras = 5
+previsao_s = 10
+subida_w_por_s = 0.5
 
 # Segundos entre leituras.
 intervalo_s = 2

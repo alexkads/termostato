@@ -27,6 +27,11 @@ source "$HOME/.cargo/env"
 echo "📦 instalando…"
 sudo install -m 755 "$ALVO/release/termostato" /usr/local/bin/termostato
 sudo install -m 644 "$AQUI/termostato.service" /etc/systemd/system/termostato.service
+# 0.4.0: as chaves do freio antigo viram as da curva (as antigas ainda são aceitas).
+if [ -f /etc/termostato.toml ]; then
+  sudo sed -i -e 's/^solta_abaixo_c/freio_comeca_c/' -e 's/^desliga_abaixo_c/freio_comeca_c/' \
+    -e 's/^leituras_para_frear/janela_leituras/' /etc/termostato.toml
+fi
 if [ ! -f /etc/termostato.toml ]; then
   sudo install -m 644 "$AQUI/termostato.toml" /etc/termostato.toml
 else
@@ -99,5 +104,5 @@ EOF
   (cd "$MONITORAMENTO" && docker compose restart prometheus grafana >/dev/null)
 fi
 
-curl -fsS 127.0.0.1:9101/metrics | grep -E '^termostato_(temperatura|limite_watts\{limite="pl1"\}|freio_puxado)'
+curl -fsS 127.0.0.1:9101/metrics | grep -E '^termostato_(temperatura|limite_watts\{limite="pl1"\}|freio_acionado)'
 echo "✅ termostato instalado: journalctl -u termostato -f para acompanhar"

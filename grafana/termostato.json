@@ -19,7 +19,7 @@
       "id": 1,
       "type": "stat",
       "title": "CPU agora",
-      "description": "Pacote da CPU (coretemp). O freio puxa a partir de 92 °C; crítico (desliga) = 100 °C.",
+      "description": "Pacote da CPU (coretemp). O freio é acionado a partir de 92 °C; crítico (desliga) = 100 °C.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -211,8 +211,8 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Freio",
-      "description": "Puxado = o PL1 caiu para o valor de freio porque a CPU passou de 92 °C.",
+      "title": "Controle da CPU",
+      "description": "A CPU nunca fica solta. 'limite normal' = PL1 no pl1_normal_w. Acima de zero, a curva de freio está segurando: 100 % = PL1 no pl1_freio_w.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -229,7 +229,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "termostato_freio_puxado",
+          "expr": "termostato_freio_intensidade",
           "legendFormat": "freio",
           "refId": "A"
         }
@@ -244,8 +244,16 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
                 "color": "red",
-                "value": 1
+                "value": 0.9
               }
             ]
           },
@@ -257,16 +265,13 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "solto",
+                  "text": "limite normal",
                   "color": "green"
-                },
-                "1": {
-                  "text": "puxado",
-                  "color": "red"
                 }
               }
             }
-          ]
+          ],
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -284,8 +289,8 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Freadas em 24 h",
-      "description": "Quantas vezes o freio puxou nas últimas 24 h.",
+      "title": "Acionamentos do freio em 24 h",
+      "description": "Quantas vezes o freio foi acionado nas últimas 24 h.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -302,8 +307,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(termostato_freadas_total[24h])",
-          "legendFormat": "freadas",
+          "expr": "increase(termostato_freio_acionamentos_total[24h])",
+          "legendFormat": "acionamentos",
           "refId": "A"
         }
       ],
@@ -402,8 +407,8 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Temperatura × freio",
-      "description": "A temperatura do pacote com as faixas do freio (92 °C puxa, 80 °C solta).",
+      "title": "Temperatura, previsão e freio",
+      "description": "A temperatura de agora, a prevista para daqui a 10 s e a intensidade do freio (0 a 100 %). A curva começa a frear em 80 °C e chega ao máximo em 92 °C, de agora ou prevista.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -421,7 +426,7 @@
             "uid": "prometheus"
           },
           "expr": "termostato_temperatura_celsius",
-          "legendFormat": "pacote",
+          "legendFormat": "agora",
           "refId": "A"
         },
         {
@@ -429,9 +434,18 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "termostato_freio_puxado * 100",
-          "legendFormat": "freio puxado",
+          "expr": "termostato_temperatura_prevista_celsius",
+          "legendFormat": "prevista",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_freio_intensidade * 100",
+          "legendFormat": "freio (%)",
+          "refId": "C"
         }
       ],
       "fieldConfig": {

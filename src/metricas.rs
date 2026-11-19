@@ -20,9 +20,13 @@ pub struct Retrato {
     pub pl1_w: Option<f64>,
     pub pl2_w: Option<f64>,
     pub pl1_alvo_w: f64,
-    pub freio_puxado: bool,
-    pub freadas: u64,
-    pub segundos_freado: f64,
+    pub freio_acionado: bool,
+    pub temperatura_prevista_c: Option<f64>,
+    pub tendencia_c_s: Option<f64>,
+    /// 0 = limite normal; 1 = freio no máximo.
+    pub freio_intensidade: f64,
+    pub acionamentos: u64,
+    pub segundos_acionado: f64,
     pub frequencia_mhz: Option<f64>,
     pub ventoinhas: Vec<VentoinhaLida>,
     pub falhas_de_leitura: u64,
@@ -62,6 +66,36 @@ impl Retrato {
             );
             valor(&mut s, "termostato_temperatura_celsius", "", t);
         }
+        if let Some(t) = self.temperatura_prevista_c {
+            metrica(
+                &mut s,
+                "termostato_temperatura_prevista_celsius",
+                "gauge",
+                "Temperatura prevista para daqui a previsao_s, pela reta das últimas leituras.",
+            );
+            valor(&mut s, "termostato_temperatura_prevista_celsius", "", t);
+        }
+        if let Some(t) = self.tendencia_c_s {
+            metrica(
+                &mut s,
+                "termostato_tendencia_celsius_por_segundo",
+                "gauge",
+                "Inclinação da temperatura nas últimas leituras (negativa esfriando).",
+            );
+            valor(&mut s, "termostato_tendencia_celsius_por_segundo", "", t);
+        }
+        metrica(
+            &mut s,
+            "termostato_freio_intensidade",
+            "gauge",
+            "0 = limite normal; 1 = freio de calor no máximo (pl1_freio_w).",
+        );
+        valor(
+            &mut s,
+            "termostato_freio_intensidade",
+            "",
+            self.freio_intensidade,
+        );
         if let Some(p) = self.potencia_w {
             metrica(
                 &mut s,
@@ -93,36 +127,41 @@ impl Retrato {
 
         metrica(
             &mut s,
-            "termostato_freio_puxado",
+            "termostato_freio_acionado",
             "gauge",
             "1 enquanto o freio de calor segura o PL1 no valor de freio.",
         );
         valor(
             &mut s,
-            "termostato_freio_puxado",
+            "termostato_freio_acionado",
             "",
-            if self.freio_puxado { 1.0 } else { 0.0 },
+            if self.freio_acionado { 1.0 } else { 0.0 },
         );
 
         metrica(
             &mut s,
-            "termostato_freadas_total",
+            "termostato_freio_acionamentos_total",
             "counter",
-            "Vezes que o freio de calor puxou.",
-        );
-        valor(&mut s, "termostato_freadas_total", "", self.freadas as f64);
-
-        metrica(
-            &mut s,
-            "termostato_freado_segundos_total",
-            "counter",
-            "Tempo com o freio puxado.",
+            "Vezes que o freio de calor foi acionado.",
         );
         valor(
             &mut s,
-            "termostato_freado_segundos_total",
+            "termostato_freio_acionamentos_total",
             "",
-            self.segundos_freado,
+            self.acionamentos as f64,
+        );
+
+        metrica(
+            &mut s,
+            "termostato_freio_acionado_segundos_total",
+            "counter",
+            "Tempo com o freio acionado.",
+        );
+        valor(
+            &mut s,
+            "termostato_freio_acionado_segundos_total",
+            "",
+            self.segundos_acionado,
         );
 
         if let Some(f) = self.frequencia_mhz {
@@ -192,8 +231,8 @@ mod testes {
             pl1_w: Some(38.0),
             pl2_w: Some(125.0),
             pl1_alvo_w: 38.0,
-            freio_puxado: true,
-            freadas: 2,
+            freio_acionado: true,
+            acionamentos: 2,
             ventoinhas: vec![VentoinhaLida {
                 numero: "1".into(),
                 rpm: Some(6156),
@@ -208,8 +247,8 @@ mod testes {
             "termostato_potencia_watts 37.5",
             "termostato_limite_watts{limite=\"pl1\"} 38",
             "termostato_limite_watts{limite=\"pl2\"} 125",
-            "termostato_freio_puxado 1",
-            "termostato_freadas_total 2",
+            "termostato_freio_acionado 1",
+            "termostato_freio_acionamentos_total 2",
             "termostato_ventoinha_rpm{ventoinha=\"1\",medida=\"piso\"} 6156",
         ] {
             assert!(t.lines().any(|l| l == linha), "falta {linha:?} em\n{t}");
@@ -220,6 +259,6 @@ mod testes {
     fn sem_leitura_a_metrica_some_em_vez_de_mentir_zero() {
         let t = Retrato::default().em_texto();
         assert!(!t.contains("termostato_temperatura_celsius "));
-        assert!(t.contains("termostato_freio_puxado 0"));
+        assert!(t.contains("termostato_freio_acionado 0"));
     }
 }
