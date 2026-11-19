@@ -83,7 +83,7 @@ if ! sudo test -f /var/lib/termostato/fabrica.toml; then
 fi
 
 sudo systemctl daemon-reload
-sudo systemctl enable termostato.service >/dev/null 2>&1
+sudo systemctl reenable termostato.service >/dev/null 2>&1
 sudo systemctl restart termostato.service
 sleep 3
 systemctl is-active --quiet termostato || { journalctl -u termostato -n 20 --no-pager; exit 1; }

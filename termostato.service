@@ -1,8 +1,17 @@
 [Unit]
 Description=Termostato da fedora: limite de potência da CPU, freio de calor, ventoinhas e métricas
 Documentation=https://github.com/alexkads/termostato
-# Depois deles, para o PL1 e as ventoinhas que valem serem os do termostato.
-After=tuned.service thermald.service systemd-modules-load.service
+# Cedo no boot e ANTES dos pesados: o firmware volta o PL1 aos 100 W a cada
+# inicialização, e em 19/11/2026 a VM e o k3s subindo levaram a CPU a 100 °C
+# antes de o termostato assumir. Ele regrava o PL1 a cada 2 s, então não
+# precisa esperar o tuned.
+# Cedo de verdade: logo depois de o udev carregar os drivers (o applesmc sai aos
+# ~6 s), antes do sysinit.target, sem esperar a rede.
+DefaultDependencies=no
+Wants=systemd-udev-trigger.service
+After=systemd-udev-trigger.service systemd-modules-load.service local-fs.target
+Before=sysinit.target shutdown.target docker.service containerd.service k3s.service libvirtd.service virtqemud.service
+Conflicts=shutdown.target
 
 [Service]
 ExecStart=/usr/local/bin/termostato /etc/termostato.toml
@@ -12,6 +21,9 @@ Nice=-5
 # Só o que ele precisa: ler o hardware e gravar no /sys.
 ProtectSystem=strict
 ReadWritePaths=/sys
+# O socket do Docker (/run/docker.sock) não precisa de ReadWritePaths: conectar
+# num socket funciona com o sistema em modo leitura, e o bind dele é recusado
+# pelo SELinux (visto em 19/11/2026: status 226/NAMESPACE).
 # /var/lib/termostato: os valores de fábrica, para o --desinstalar.
 StateDirectory=termostato
 ProtectHome=yes
@@ -19,4 +31,4 @@ PrivateTmp=yes
 NoNewPrivileges=yes
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=sysinit.target

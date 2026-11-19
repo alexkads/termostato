@@ -1,6 +1,6 @@
 [package]
 name = "termostato"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.100"
 description = "Guarda o calor da fedora (MacBookPro11,2): limite de potência da CPU, freio de calor, ventoinhas e métricas para o Prometheus"
@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+serde_json = "1"
 signal-hook = "0.3"
 
 [dev-dependencies]
@@ -22,6 +23,9 @@ pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 # Prosa em português cita nomes (MacBook, PL1) que a regra quer entre crases.
 doc_markdown = "allow"
+# Nos testes, c (config), d (pasta), f (freio)… são a convenção mais legível.
+many_single_char_names = "allow"
+assert_is_empty = "allow"
 cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"

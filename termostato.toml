@@ -30,3 +30,42 @@ ventoinhas = "maximo"
 
 # Onde o Prometheus lê. Só no loopback: o serviço roda como root.
 escuta = "127.0.0.1:9101"
+
+# ── Os superpoderes ────────────────────────────────────────────────────────
+
+# Os processos: observar quem gasta CPU, aprender quem esquenta (o histórico
+# negativo, em /var/lib/termostato/historico.json) e frear antes quando um
+# suspeito volta a gastar CPU.
+[processos]
+aprender = true
+antecipar = true
+suspeito_c_s = 1.0          # nota de calor (°C/s) a partir da qual é suspeito
+minimo_de_observacoes = 3   # observações de calor antes de virar suspeito
+fatia_minima = 0.05         # fatia da CPU da máquina (0 a 1) para contar
+esquecer_dias = 30
+ignorar = ["termostato"]
+
+# As mãos: segurar CPU (cpu.max, ou o Docker pelos NanoCpus) e memória
+# (memory.high) no cgroup de quem abusa, e devolver quando a máquina se acalma.
+# Ninguém é morto. "observar" (o padrão) só mostra no journal e no Grafana o
+# que faria; "agir" faz; "desligado" nem observa.
+[maos]
+modo = "observar"
+cpu_a_partir_de = 0.3       # intensidade do freio (0 a 1) que começa a segurar a CPU
+minimo_cpus = 1.0           # nenhum cgroup fica com menos núcleos que isto
+memoria_aperto_pct = 10.0   # pressão de memória (PSI some avg10, %) que segura memória
+memoria_folga_pct = 2.0     # abaixo disto, por `calmo_s`, os limites voltam
+calmo_s = 60
+fatia_minima = 0.2
+nunca = [
+  "/init.scope", "/system.slice/termostato.service", "/system.slice/sshd.service",
+  "/system.slice/systemd-", "/system.slice/tailscaled.service",
+  "/system.slice/docker.service", "/system.slice/containerd.service",
+  "monitoramento-", "testcontainers-ryuk-",
+]
+
+# Cada intervenção vira uma anotação no Grafana. O token (de uma conta de
+# serviço com permissão de anotar) fica num arquivo com modo 600.
+[grafana]
+url = "http://100.110.180.47:3000"
+token_arquivo = "/etc/termostato/grafana.token"

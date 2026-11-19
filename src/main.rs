@@ -8,14 +8,24 @@
 //! nunca deixa a máquina sem limite. Os valores de fábrica só voltam com
 //! `termostato --desinstalar` (ver `fabrica.rs`).
 //!
+//! Os superpoderes (0.5): o guardião vê os processos, aprende quem esquenta e
+//! freia antes, lê a pressão de memória, segura os mal-educados no cgroup deles
+//! (no modo observar, só mostra o que faria) e avisa o Grafana de tudo.
+//!
 //!   termostato [config]                 # o serviço
 //!   termostato --desinstalar [config]   # devolve a fábrica e apaga o estado
 
+mod avisos;
 mod config;
 mod fabrica;
 mod freio;
+mod guardiao;
 mod hardware;
+mod historico;
+mod maos;
 mod metricas;
+mod pressao;
+mod processos;
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -24,8 +34,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use avisos::{Avisador, Aviso};
 use config::{Config, Ventoinhas};
 use freio::{Freio, Mudanca};
+use guardiao::Guardiao;
 use hardware::{Rapl, Sensor, Ventoinha};
 use metricas::{Retrato, VentoinhaLida};
 
@@ -90,10 +102,13 @@ fn anunciar(cfg: &Config, achado: &Fabrica, ventoinhas: usize) {
     );
 }
 
+// A subida e o laço em sequência: dividir espalharia a ordem que importa
+// (fábrica, sinais, HTTP, guardião, laço, parada segura).
+#[allow(clippy::too_many_lines)]
 fn rodar(caminho: &Path) -> Result<(), String> {
     let cfg = Config::ler(caminho)?;
     let sysfs = PathBuf::from(&cfg.sysfs);
-    let sensor = Sensor::achar(&sysfs)?;
+    let sensor = esperar_o_sensor(&sysfs)?;
     let mut rapl = match Rapl::achar(&sysfs) {
         Ok(r) => Some(r),
         Err(e) => {
@@ -101,7 +116,9 @@ fn rodar(caminho: &Path) -> Result<(), String> {
             None
         }
     };
-    let ventoinhas = hardware::ventoinhas(&sysfs);
+    // Subindo cedo no boot, o `applesmc` pode ainda não ter carregado: o laço
+    // procura as ventoinhas de novo enquanto não as encontrar.
+    let mut ventoinhas = hardware::ventoinhas(&sysfs);
 
     let achado = Fabrica {
         pl1_uw: rapl.as_ref().and_then(|r| r.pl1_uw().ok()),
@@ -143,6 +160,20 @@ fn rodar(caminho: &Path) -> Result<(), String> {
         std::thread::spawn(move || servir(&ouvinte, &estado, validade));
     }
 
+    let (avisador, sem_grafana) = Avisador::novo(&cfg.grafana);
+    if let Some(motivo) = sem_grafana {
+        eprintln!("⚠️ {motivo}");
+    }
+    let mut guardiao = Guardiao::novo(&cfg, avisador);
+    guardiao.avisador().avisar(Aviso::novo(
+        format!(
+            "🌡️ termostato {} subiu (mãos: {:?})",
+            env!("CARGO_PKG_VERSION"),
+            cfg.maos.modo
+        ),
+        &["subiu"],
+    ));
+
     let mut freio = Freio::default();
     let mut retrato = Retrato::default();
     let intervalo = Duration::from_secs_f64(cfg.intervalo_s);
@@ -156,7 +187,19 @@ fn rodar(caminho: &Path) -> Result<(), String> {
         retrato.leituras += 1;
 
         let agora_s = agora.duration_since(inicio).as_secs_f64();
-        ler_a_temperatura(&sensor, &mut freio, agora_s, &cfg, &mut retrato);
+        match sensor.celsius() {
+            Ok(t) => {
+                let prevista_processos = guardiao.antes_do_freio(agora_s, t, &cfg);
+                let d = freio.ler(agora_s, t, prevista_processos, &cfg);
+                registrar_o_freio(t, &d, &cfg, &mut retrato, guardiao.avisador());
+                guardiao.depois_do_freio(agora_s, t, &d, &cfg, &mut retrato);
+            }
+            Err(e) => {
+                retrato.falhas_de_leitura += 1;
+                retrato.temperatura_c = None;
+                eprintln!("⚠️ temperatura: {e}");
+            }
+        }
         if freio.acionado() {
             retrato.segundos_acionado += dt;
         }
@@ -164,9 +207,23 @@ fn rodar(caminho: &Path) -> Result<(), String> {
         retrato.pl1_alvo_w = freio.pl1_w(&cfg);
 
         if let Some(r) = rapl.as_mut() {
-            cuidar_do_rapl(r, w_para_uw(retrato.pl1_alvo_w), &mut retrato);
+            cuidar_do_rapl(
+                r,
+                w_para_uw(retrato.pl1_alvo_w),
+                &mut retrato,
+                guardiao.avisador(),
+            );
         }
         if cfg.ventoinhas == Ventoinhas::Maximo {
+            if ventoinhas.is_empty() {
+                ventoinhas = hardware::ventoinhas(&sysfs);
+                if !ventoinhas.is_empty() {
+                    println!(
+                        "🌀 {} ventoinhas apareceram (applesmc carregou)",
+                        ventoinhas.len()
+                    );
+                }
+            }
             for v in &ventoinhas {
                 cuidar_da_ventoinha(v, &mut retrato);
             }
@@ -189,51 +246,72 @@ fn rodar(caminho: &Path) -> Result<(), String> {
         esperar(intervalo, &parar);
     }
 
+    guardiao.parar();
     parar_seguro(rapl.as_ref(), &cfg);
     Ok(())
 }
 
-/// Uma leitura do sensor, passada ao freio.
-fn ler_a_temperatura(
-    sensor: &Sensor,
-    freio: &mut Freio,
-    agora_s: f64,
+/// Subindo cedo no boot, o `coretemp` pode ainda não ter carregado: espera
+/// até 30 s por ele antes de desistir (e o systemd tenta de novo em 3 s).
+fn esperar_o_sensor(sysfs: &Path) -> Result<Sensor, String> {
+    let mut ultimo = String::new();
+    for tentativa in 0..30 {
+        match Sensor::achar(sysfs) {
+            Ok(s) => {
+                if tentativa > 0 {
+                    println!("🌡️ sensor encontrado depois de {tentativa} s");
+                }
+                return Ok(s);
+            }
+            Err(e) => ultimo = e,
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    Err(ultimo)
+}
+
+/// O que a curva decidiu: retrato, journal e Grafana.
+fn registrar_o_freio(
+    t: f64,
+    d: &freio::Decisao,
     cfg: &Config,
     retrato: &mut Retrato,
+    avisador: &Avisador,
 ) {
-    match sensor.celsius() {
-        Ok(t) => {
-            retrato.temperatura_c = Some(t);
-            let d = freio.ler(agora_s, t, cfg);
-            retrato.temperatura_prevista_c = Some(d.prevista_c);
-            retrato.tendencia_c_s = Some(d.tendencia_c_s);
-            retrato.freio_intensidade = d.intensidade;
-            match d.mudanca {
-                Some(Mudanca::Acionou) => {
-                    retrato.acionamentos += 1;
-                    println!(
-                        "🔥 {t:.0} °C agora, {:.0} °C previstos em {} s ({:+.1} °C/s): freio de calor acionado, PL1 em {:.1} W",
-                        d.prevista_c, cfg.previsao_s, d.tendencia_c_s, d.pl1_w
-                    );
-                }
-                Some(Mudanca::Desligou) => println!(
-                    "❄️ {t:.0} °C: freio de calor desligado, de volta ao limite normal de {} W",
-                    cfg.pl1_normal_w
-                ),
-                None => {}
-            }
+    retrato.temperatura_c = Some(t);
+    retrato.temperatura_prevista_c = Some(d.prevista_c);
+    retrato.tendencia_c_s = Some(d.tendencia_c_s);
+    retrato.freio_intensidade = d.intensidade;
+    let texto = match d.mudanca {
+        Some(Mudanca::Acionou) => {
+            retrato.acionamentos += 1;
+            retrato.contar("freio_acionado");
+            format!(
+                "🔥 {t:.0} °C agora, {:.0} °C previstos em {} s ({:+.1} °C/s): freio de calor acionado, PL1 em {:.1} W",
+                d.prevista_c, cfg.previsao_s, d.tendencia_c_s, d.pl1_w
+            )
         }
-        Err(e) => {
-            retrato.falhas_de_leitura += 1;
-            retrato.temperatura_c = None;
-            eprintln!("⚠️ temperatura: {e}");
+        Some(Mudanca::Desligou) => {
+            retrato.contar("freio_desligado");
+            format!(
+                "❄️ {t:.0} °C: freio de calor desligado, de volta ao limite normal de {} W",
+                cfg.pl1_normal_w
+            )
         }
-    }
+        None => return,
+    };
+    println!("{texto}");
+    let tag = if d.mudanca == Some(Mudanca::Acionou) {
+        "acionado"
+    } else {
+        "desligado"
+    };
+    avisador.avisar(Aviso::novo(texto, &["freio", tag]));
 }
 
 /// Grava o PL1 quando ele não é o alvo: na subida, a cada mudança do freio, e
 /// quando outro programa (o `tuned`, um script) o mudou por fora.
-fn cuidar_do_rapl(r: &mut Rapl, alvo_uw: u64, retrato: &mut Retrato) {
+fn cuidar_do_rapl(r: &mut Rapl, alvo_uw: u64, retrato: &mut Retrato, avisador: &Avisador) {
     match r.pl1_uw() {
         Ok(atual) if atual.abs_diff(alvo_uw) > 500_000 => {
             if let Err(e) = r.definir_pl1_uw(alvo_uw) {
@@ -245,11 +323,14 @@ fn cuidar_do_rapl(r: &mut Rapl, alvo_uw: u64, retrato: &mut Retrato) {
             {
                 // O PL1 lido na volta anterior era o nosso: quem mudou foi o freio.
             } else {
-                println!(
-                    "🔧 PL1 estava em {} W: reaplicado {} W",
+                let texto = format!(
+                    "🔧 PL1 estava em {} W: reaplicado {} W (outro programa mexeu)",
                     uw_para_w(atual),
                     uw_para_w(alvo_uw)
                 );
+                println!("{texto}");
+                retrato.contar("pl1_reaplicado");
+                avisador.avisar(Aviso::novo(texto, &["pl1"]));
             }
         }
         Ok(_) => {}
@@ -415,13 +496,13 @@ mod testes {
         hardware::sysfs_de_teste::montar(d.path(), 70);
         let mut r = Rapl::achar(d.path()).unwrap();
         let mut retrato = Retrato::default();
-        cuidar_do_rapl(&mut r, w_para_uw(38.0), &mut retrato);
+        cuidar_do_rapl(&mut r, w_para_uw(38.0), &mut retrato, &Avisador::mudo());
         assert_eq!(r.pl1_uw().unwrap(), 38_000_000);
         assert_eq!(retrato.pl1_w, Some(38.0));
         assert_eq!(retrato.pl2_w, Some(125.0));
         // Alguém (o tuned) volta o PL1 a 100 W: a próxima volta corrige.
         r.definir_pl1_uw(100_000_000).unwrap();
-        cuidar_do_rapl(&mut r, w_para_uw(38.0), &mut retrato);
+        cuidar_do_rapl(&mut r, w_para_uw(38.0), &mut retrato, &Avisador::mudo());
         assert_eq!(r.pl1_uw().unwrap(), 38_000_000);
         assert_eq!(retrato.falhas_de_leitura, 0);
     }

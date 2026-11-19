@@ -3,7 +3,19 @@
 //! O formato de exposição do Prometheus é texto simples, e escrito aqui ele
 //! dispensa uma dependência inteira para um punhado de linhas.
 
+use std::collections::BTreeMap;
 use std::fmt::Write;
+
+use crate::pressao::Pressao;
+
+/// Um dos processos que mais gastam CPU agora.
+#[derive(Debug, Clone, Default)]
+pub struct ProcessoLido {
+    pub nome: String,
+    pub fatia: f64,
+    pub copias: u32,
+    pub rss_mb: f64,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct VentoinhaLida {
@@ -31,6 +43,24 @@ pub struct Retrato {
     pub ventoinhas: Vec<VentoinhaLida>,
     pub falhas_de_leitura: u64,
     pub leituras: u64,
+    pub pressao: Option<Pressao>,
+    /// Os 5 nomes que mais gastam CPU agora.
+    pub processos: Vec<ProcessoLido>,
+    /// O histórico negativo inteiro: nome e nota.
+    pub suspeitos: Vec<(String, f64)>,
+    /// Cgroups segurados agora (só no modo agir).
+    pub segurados: usize,
+    /// Há suspeito gastando CPU agora.
+    pub freio_antecipado: bool,
+    /// Quantas vezes cada ação aconteceu.
+    pub acoes: BTreeMap<String, u64>,
+}
+
+/// Escapa um valor de rótulo do Prometheus.
+fn rotulo(v: &str) -> String {
+    v.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', " ")
 }
 
 fn metrica(saida: &mut String, nome: &str, tipo: &str, ajuda: &str) {
@@ -43,6 +73,146 @@ fn valor(saida: &mut String, nome: &str, rotulos: &str, v: f64) {
 }
 
 impl Retrato {
+    pub fn contar(&mut self, acao: &str) {
+        *self.acoes.entry(acao.to_string()).or_default() += 1;
+    }
+
+    // Outra lista corrida, como a de `em_texto`.
+    #[allow(clippy::too_many_lines)]
+    fn superpoderes(&self, s: &mut String) {
+        if let Some(p) = &self.pressao {
+            metrica(
+                s,
+                "termostato_pressao_pct",
+                "gauge",
+                "Pressão (PSI avg10, %): tempo com processos parados esperando o recurso.",
+            );
+            for (recurso, tipo, v) in [
+                ("memoria", "some", p.memoria_some_pct),
+                ("memoria", "full", p.memoria_full_pct),
+                ("cpu", "some", p.cpu_some_pct),
+                ("io", "some", p.io_some_pct),
+            ] {
+                valor(
+                    s,
+                    "termostato_pressao_pct",
+                    &format!("{{recurso=\"{recurso}\",tipo=\"{tipo}\"}}"),
+                    v,
+                );
+            }
+            metrica(
+                s,
+                "termostato_memoria_disponivel_pct",
+                "gauge",
+                "MemAvailable sobre MemTotal, em %.",
+            );
+            valor(
+                s,
+                "termostato_memoria_disponivel_pct",
+                "",
+                p.memoria_disponivel_pct,
+            );
+            metrica(
+                s,
+                "termostato_swap_usado_mb",
+                "gauge",
+                "Swap em uso, em MB.",
+            );
+            valor(s, "termostato_swap_usado_mb", "", p.swap_usado_mb);
+        }
+        if !self.processos.is_empty() {
+            metrica(
+                s,
+                "termostato_processo_fatia",
+                "gauge",
+                "Fatia da CPU da máquina (0 a 1) dos 5 nomes que mais gastam agora.",
+            );
+            for p in &self.processos {
+                valor(
+                    s,
+                    "termostato_processo_fatia",
+                    &format!("{{processo=\"{}\"}}", rotulo(&p.nome)),
+                    p.fatia,
+                );
+            }
+            metrica(
+                s,
+                "termostato_processo_copias",
+                "gauge",
+                "Quantos processos de cada um dos 5 nomes que mais gastam CPU.",
+            );
+            for p in &self.processos {
+                valor(
+                    s,
+                    "termostato_processo_copias",
+                    &format!("{{processo=\"{}\"}}", rotulo(&p.nome)),
+                    f64::from(p.copias),
+                );
+            }
+            metrica(
+                s,
+                "termostato_processo_memoria_mb",
+                "gauge",
+                "Memória residente somada dos 5 nomes que mais gastam CPU.",
+            );
+            for p in &self.processos {
+                valor(
+                    s,
+                    "termostato_processo_memoria_mb",
+                    &format!("{{processo=\"{}\"}}", rotulo(&p.nome)),
+                    p.rss_mb,
+                );
+            }
+        }
+        metrica(
+            s,
+            "termostato_processo_nota_c_s",
+            "gauge",
+            "Nota de calor (°C/s) de cada nome do histórico negativo.",
+        );
+        for (nome, nota) in &self.suspeitos {
+            valor(
+                s,
+                "termostato_processo_nota_c_s",
+                &format!("{{processo=\"{}\"}}", rotulo(nome)),
+                *nota,
+            );
+        }
+        metrica(
+            s,
+            "termostato_freio_antecipado",
+            "gauge",
+            "1 quando um suspeito do histórico negativo está gastando CPU.",
+        );
+        valor(
+            s,
+            "termostato_freio_antecipado",
+            "",
+            if self.freio_antecipado { 1.0 } else { 0.0 },
+        );
+        metrica(
+            s,
+            "termostato_segurados",
+            "gauge",
+            "Cgroups com CPU ou memória segurados agora.",
+        );
+        valor(s, "termostato_segurados", "", self.segurados as f64);
+        metrica(
+            s,
+            "termostato_acoes_total",
+            "counter",
+            "Ações do termostato, por tipo (inclui as do modo observar).",
+        );
+        for (acao, n) in &self.acoes {
+            valor(
+                s,
+                "termostato_acoes_total",
+                &format!("{{acao=\"{}\"}}", rotulo(acao)),
+                *n as f64,
+            );
+        }
+    }
+
     // Uma lista corrida de métricas: dividir só espalharia a ordem do texto.
     #[allow(clippy::too_many_lines)]
     pub fn em_texto(&self) -> String {
@@ -190,6 +360,8 @@ impl Retrato {
                 }
             }
         }
+
+        self.superpoderes(&mut s);
 
         metrica(
             &mut s,

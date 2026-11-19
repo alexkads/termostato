@@ -65,3 +65,61 @@ groups:
               type: threshold
               expression: B
               conditions: [ { evaluator: { type: gt, params: [0] } } ]
+
+      - uid: termostato-agiu
+        title: O termostato segurou um processo ou contêiner
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { gravidade: aviso }
+        annotations:
+          summary: "As mãos do termostato agiram na fedora: limitaram CPU ou memória de algum processo ou contêiner (ou devolveram o limite)."
+          description: "O que foi feito está nas marcas do painel Termostato e em `journalctl -u termostato | grep 🤚`. Para desfazer à mão: `[maos] modo = \"observar\"` em /etc/termostato.toml e `sudo systemctl restart termostato` (ao parar, ele devolve tudo)."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              expr: 'sum(increase(termostato_acoes_total{acao=~"segurar_cpu|segurar_memoria|devolver"}[5m]))'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [ { evaluator: { type: gt, params: [0] } } ]
+
+      - uid: termostato-memoria
+        title: Pressão de memória alta na fedora (mais de 20 % por 2 min)
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { gravidade: critica }
+        annotations:
+          summary: "Processos da fedora passam mais de 20 % do tempo parados esperando memória: é o caminho do travamento de 19/11/2026."
+          description: "Veja no painel Termostato quem está gastando. Compilação com muitos jobs (CARGO_BUILD_JOBS acima de 2), a VM Windows e os contêineres do e2e juntos não cabem em 16 GB."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 120, to: 0 }
+            model:
+              refId: A
+              expr: 'max(termostato_pressao_pct{recurso="memoria",tipo="some"})'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [ { evaluator: { type: gt, params: [20] } } ]
