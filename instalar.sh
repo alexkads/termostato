@@ -43,6 +43,14 @@ for antigo in cpu-folego-longo freio-de-calor ventoinhas-no-maximo; do
 done
 sudo rm -f /usr/local/bin/freio-de-calor /usr/local/bin/ventoinhas-no-maximo
 
+# O thermald (--adaptive) mexe no mesmo PL1 em degraus de 5 W quando a CPU
+# esquenta (visto em 19/11/2026: 95 → 90 → 80 → 70 W a cada 2 s). Dois
+# controladores no mesmo registro oscilam: o termostato fica com o papel.
+if systemctl is-enabled --quiet thermald.service 2>/dev/null; then
+  sudo systemctl disable --now thermald.service >/dev/null 2>&1
+  echo "   🧹 thermald desligado: o termostato é quem controla o PL1"
+fi
+
 sudo systemctl daemon-reload
 sudo systemctl enable termostato.service >/dev/null 2>&1
 sudo systemctl restart termostato.service

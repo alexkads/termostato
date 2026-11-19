@@ -8,7 +8,7 @@ A ideia é não precisar mexer no sistema operacional: tudo o que se ajusta est�
 
 - **O firmware da Apple deixa o limite de potência de longo prazo (RAPL PL1) em 100 W**, mais que o dobro dos 47 W de projeto do i7-4770HQ. Na prática não há limite: numa compilação longa a CPU fica em turbo nos 4 núcleos até chegar a 99 °C (crítico = 100 °C). No macOS, quem segurava isso era o próprio sistema; no Linux, ninguém.
 - **O turbo curto é o que faz dele um foguetinho.** O termostato não mexe no PL2 (125 W) nem no turbo. Uma arrancada (abrir um programa, compilar um arquivo) sai em até 3,4 GHz como sempre. Só a carga sustentada, depois de ~28 s com os 4 núcleos ocupados, passa a caber em 38 W, e a CPU acha sozinha o clock que cabe nisso.
-- **Alguma coisa volta o PL1 para 100 W de vez em quando** (visto em 19/11/2026; suspeitos: o `thermald --adaptive` ao reiniciar, ou o `tuned`). Por isso o termostato confere e regrava o PL1 a cada leitura, e registra no journal com 🔧 quando precisou.
+- **O `thermald` brigava pelo mesmo registro.** Com `--adaptive`, ele mexe no PL1 em degraus de 5 W quando a CPU esquenta (visto em 19/11/2026: 95 → 90 → 80 → 70 W a cada 2 s, contra os 38 W do termostato). O `instalar.sh` o desliga. O termostato ainda confere e regrava o PL1 a cada leitura, e registra no journal com 🔧 quando precisou: se essas linhas voltarem, há outro programa mexendo no PL1.
 
 ## O que ele faz, a cada 2 segundos
 
@@ -52,7 +52,7 @@ O `instalar.sh`:
 - compila esperando a trava da oficina (`~/oficina/.trava-compilacao`), com 2 jobs e `nice`;
 - instala `/usr/local/bin/termostato` e o `termostato.service`;
 - cria `/etc/termostato.toml` só se ele não existir;
-- remove os três serviços provisórios de 19/11/2026 (`cpu-folego-longo`, `freio-de-calor`, `ventoinhas-no-maximo`);
+- remove os três serviços provisórios de 19/11/2026 (`cpu-folego-longo`, `freio-de-calor`, `ventoinhas-no-maximo`) e desliga o `thermald`;
 - liga o termostato ao Prometheus e ao Grafana de `~/oficina/monitoramento`.
 
 O Rust é o 1.100.0, fixado em [`rust-toolchain.toml`](rust-toolchain.toml) só para este projeto. O padrão da máquina não muda.
