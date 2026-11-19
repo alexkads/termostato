@@ -4,6 +4,8 @@ Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs
 
 ## 0.6.0: MegaBlaster, a conversa com o kernel e com o chip
 
+- **Pacote RPM** (`pacote/termostato.spec`), publicado no Release `v0.6.0`: primeira instalação liga o serviço, desliga o `thermald` e volta o perfil ao `balanced`; atualização só reinicia; remoção devolve a fábrica. O `instalar.sh` e o `desinstalar.sh` passam a usar o `dnf`.
+
 - **TCC offset:** o chip se freia sozinho a 92 °C (`MSR 0x1A2`, offset 8), gravado pelo driver `msr` do kernel, porque o `intel_tcc_cooling` não atende o Haswell. Mexe só nos 6 bits, recusa acima de 15 °C, confere lendo de novo, regrava a cada 30 s e volta a 0 no `--desinstalar`.
 - **Gatilho de pressão:** o kernel acorda o termostato quando a memória para 150 ms em 1 s (PSI trigger com `poll`).
 - Métricas do kernel: estrangulamento térmico, domínios do RAPL (`core`, `uncore`, `dram`) e os sensores do `applesmc`.

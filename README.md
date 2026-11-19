@@ -6,6 +6,8 @@ Um serviço em Rust que cuida de todo o calor da **fedora** (`macpro-i7-alex`), 
 
 Desde a 0.5, ele tem **superpoderes**: vê os processos e aprende quem costuma esquentar a máquina, freando **antes** quando eles aparecem; sente a pressão de memória (com o próprio kernel o acordando); segura no cgroup quem abusa (por padrão, só observando); grava no chip uma proteção que faz a **própria CPU se frear a 92 °C**; e avisa o Grafana de tudo o que faz. Ver [os superpoderes](docs/superpoderes.md).
 
+> ⚠️ **Testado num processador só.** O termostato foi feito e testado em **uma máquina**: um MacBookPro11,2 (Retina 15", 2014) com **Intel Core i7-4770HQ (Haswell)** e **Fedora 44**. Várias partes dependem desse hardware: as ventoinhas pelo `applesmc` (só Macs), o limite de potência pelo RAPL (Intel), o **TCC offset gravado direto no `MSR 0x1A2`** (o chip precisa dizer que é programável, e a gravação marca o kernel como "tainted") e os valores de fábrica que o instalador semeia (PL1 de 100 W, do firmware da Apple). Em outro processador ou outro Mac, revise o [`termostato.toml`](termostato.toml) antes, comece com `tcc_offset_c = 0` e as mãos em `"observar"`, e acompanhe o journal. Use por sua conta e risco.
+
 Não é preciso mexer no sistema operacional: tudo se ajusta num arquivo, o `/etc/termostato.toml`.
 
 ## Por que existe
@@ -34,6 +36,16 @@ Fora o que o termostato faz em tempo de execução, a fedora fica no padrão do 
 
 ## Começo rápido
 
+O termostato é instalado por um **pacote RPM** (Fedora 44, x86_64), anexado a cada [Release](https://github.com/alexkads/termostato/releases):
+
+```bash
+sudo dnf install https://github.com/alexkads/termostato/releases/download/v0.6.0/termostato-0.6.0-1.fc44.x86_64.rpm
+```
+
+Na primeira instalação, o pacote liga o serviço (no `sysinit`, antes do Docker, do k3s e da VM), desliga o `thermald` e volta o perfil de energia ao `balanced`. Numa atualização, só reinicia o serviço; o `/etc/termostato.toml` ajustado nunca é trocado. Remover (`sudo dnf remove termostato`) devolve a fábrica: PL1 100 W, TCC offset 0, pisos das ventoinhas, e religa o `thermald`.
+
+Na fedora, o `instalar.sh` faz tudo de uma vez a partir do código (gera o RPM, instala e liga o Prometheus e o Grafana desta máquina), e o `desinstalar.sh` desfaz:
+
 ```bash
 rsync -a --delete --exclude target ~/Projects/termostato/ fedora:oficina/repos/termostato/
 ```
@@ -45,7 +57,6 @@ ssh fedora 'cd ~/oficina/repos/termostato && ./instalar.sh'
 - **Painel:** http://macpro-i7-alex:3000/d/termostato (pela tailnet)
 - **Ao vivo:** `ssh fedora 'journalctl -u termostato -f'`
 - **Ajustar:** `ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'`
-- **Desinstalar:** `ssh fedora 'cd ~/oficina/repos/termostato && ./desinstalar.sh'`
 
 ## A configuração
 

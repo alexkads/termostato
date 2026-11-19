@@ -124,7 +124,7 @@ pub struct ConfigGrafana {
 impl Default for ConfigGrafana {
     fn default() -> Self {
         Self {
-            url: "http://100.110.180.47:3000".into(),
+            url: String::new(),
             token_arquivo: "/etc/termostato/grafana.token".into(),
         }
     }

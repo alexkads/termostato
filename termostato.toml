@@ -80,5 +80,5 @@ nunca = [
 # Cada intervenção vira uma anotação no Grafana. O token (de uma conta de
 # serviço com permissão de anotar) fica num arquivo com modo 600.
 [grafana]
-url = "http://100.110.180.47:3000"
+url = ""                    # ex.: "http://grafana.local:3000"; vazio = sem anotações
 token_arquivo = "/etc/termostato/grafana.token"

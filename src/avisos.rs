@@ -196,8 +196,8 @@ mod testes {
     #[test]
     fn endereco_da_url() {
         assert_eq!(
-            endereco("http://100.110.180.47:3000").unwrap(),
-            "100.110.180.47:3000"
+            endereco("http://100.64.0.10:3000").unwrap(),
+            "100.64.0.10:3000"
         );
         assert_eq!(endereco("http://grafana").unwrap(), "grafana:80");
         assert!(endereco("https://x").is_err());

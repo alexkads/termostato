@@ -16,7 +16,7 @@ Conflicts=shutdown.target
 [Service]
 # O driver msr do kernel, para o TCC offset (o - aceita se já estiver carregado).
 ExecStartPre=-/usr/sbin/modprobe msr
-ExecStart=/usr/local/bin/termostato /etc/termostato.toml
+ExecStart=/usr/bin/termostato /etc/termostato.toml
 Restart=always
 RestartSec=3
 Nice=-5

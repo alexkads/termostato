@@ -4,7 +4,15 @@ Tudo o que se faz no dia a dia com o termostato, sem mexer no sistema operaciona
 
 ## Instalar ou atualizar
 
-O `gh` da fedora não tem token, então o código vai do Mac para o clone da fedora, e o instalador roda lá:
+### Pelo Release (o pacote pronto)
+
+Cada versão tem um [Release](https://github.com/alexkads/termostato/releases) com o RPM anexado, e o `dnf` instala direto pela URL:
+
+```bash
+ssh fedora 'sudo dnf install -y https://github.com/alexkads/termostato/releases/download/v0.6.0/termostato-0.6.0-1.fc44.x86_64.rpm'
+```
+
+### Pelo código, na fedora
 
 ```bash
 rsync -a --delete --exclude target ~/Projects/termostato/ fedora:oficina/repos/termostato/
@@ -16,18 +24,31 @@ ssh fedora 'cd ~/oficina/repos/termostato && ./instalar.sh'
 
 O [`instalar.sh`](../instalar.sh), na ordem:
 
-1. Compila esperando a trava da oficina (`~/oficina/.trava-compilacao`, a mesma da bateria noturna e do e2e), com 2 jobs e `nice`.
-2. Instala `/usr/local/bin/termostato` e o `termostato.service`.
-3. Migra as chaves antigas do `/etc/termostato.toml` e só cria o arquivo se ele não existir. O que você ajustou fica.
-4. Remove os serviços provisórios de 19/11/2026, se ainda existirem.
-5. Volta o perfil de energia ao **balanced**, o padrão do Fedora.
-6. Desliga o `thermald`, o único desvio do padrão (ver [decisões](decisoes.md)).
-7. Semeia os valores de fábrica, se ainda não existirem.
-8. Reinicia o serviço (é seguro: parar deixa o limite normal, nunca os 100 W de fábrica).
-9. Liga o Prometheus e o Grafana de `~/oficina/monitoramento`: o job `termostato`, o painel e os alertas.
-10. Mostra as primeiras métricas.
+1. Gera o RPM com o [`pacote/gerar-rpm.sh`](../pacote/gerar-rpm.sh): compila esperando a trava da oficina (`~/oficina/.trava-compilacao`, a mesma da bateria noturna e do e2e), com 2 jobs e `nice`, e roda o `rpmbuild` com o [`pacote/termostato.spec`](../pacote/termostato.spec).
+2. Tira o que veio antes do pacote: a instalação à mão (`/usr/local/bin`, unit em `/etc/systemd/system`) e os serviços provisórios de 19/11/2026. Parar o termostato deixa o limite normal e o TCC no chip, então a troca não abre buraco (medido: o PL1 não passou de 38 W).
+3. Migra as chaves antigas do `/etc/termostato.toml` e semeia os valores de fábrica, se faltarem.
+4. Instala o RPM com o `dnf` (ou reinstala, na mesma versão).
+5. Liga o Prometheus e o Grafana de `~/oficina/monitoramento`: o job `termostato`, o painel e os alertas. Eles são desta máquina e por isso ficam fora do pacote.
 
-Reinstalar é seguro, e é assim que se atualiza.
+### O que o pacote faz
+
+| Momento | O que acontece |
+|---|---|
+| Primeira instalação | liga o serviço (no `sysinit.target`), desliga o `thermald` (o único desvio do padrão do Fedora) e volta o perfil de energia ao `balanced` |
+| Atualização | reinicia o serviço; parar deixa o limite normal, então não há janela sem limite. O `/etc/termostato.toml` ajustado fica (`%config(noreplace)`; o novo vira `.rpmnew`) |
+| Remoção (`dnf remove`) | para o serviço, roda `termostato --desinstalar` (PL1 100 W, TCC offset 0, pisos das ventoinhas) e religa o `thermald` |
+
+Os arquivos: `/usr/bin/termostato`, `/usr/lib/systemd/system/termostato.service`, `/etc/termostato.toml`, `/var/lib/termostato/` e a documentação em `/usr/share/doc/termostato/`. O token do Grafana (`/etc/termostato/grafana.token`) não vem no pacote: é desta máquina.
+
+### Publicar uma versão nova
+
+```bash
+ssh fedora 'cd ~/oficina/repos/termostato && pacote/gerar-rpm.sh'
+```
+
+```bash
+scp 'fedora:oficina/repos/termostato/pacote/rpm/termostato-*.rpm' /tmp/ && gh release create vX.Y.Z /tmp/termostato-X.Y.Z-*.rpm -R alexkads/termostato --title "termostato X.Y.Z" --notes-file CHANGELOG.md
+```
 
 ## Desinstalar
 
@@ -35,7 +56,7 @@ Reinstalar é seguro, e é assim que se atualiza.
 ssh fedora 'cd ~/oficina/repos/termostato && ./desinstalar.sh'
 ```
 
-Devolve o PL1 de fábrica (`termostato --desinstalar`), remove o serviço, o binário, a configuração e o estado, religa o `thermald` e tira o termostato do Prometheus e do Grafana. É o único caminho que volta o PL1 aos 100 W do firmware.
+Remove o pacote (que devolve a fábrica e religa o `thermald`), apaga a configuração e o estado e tira o termostato do Prometheus e do Grafana. É o único caminho que volta o PL1 aos 100 W do firmware.
 
 ## Ajustar
 
