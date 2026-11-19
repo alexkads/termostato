@@ -43,12 +43,28 @@ for antigo in cpu-folego-longo freio-de-calor ventoinhas-no-maximo; do
 done
 sudo rm -f /usr/local/bin/freio-de-calor /usr/local/bin/ventoinhas-no-maximo
 
-# O thermald (--adaptive) mexe no mesmo PL1 em degraus de 5 W quando a CPU
-# esquenta (visto em 19/11/2026: 95 → 90 → 80 → 70 W a cada 2 s). Dois
-# controladores no mesmo registro oscilam: o termostato fica com o papel.
+# O único desvio do padrão do Fedora, e por isso fica aqui (o desinstalar.sh o
+# desfaz): o thermald (--adaptive) mexe no mesmo PL1 em degraus de 5 W quando a
+# CPU esquenta (visto em 19/11/2026: 95 → 90 → 80 → 70 W a cada 2 s). Dois
+# controladores no mesmo registro oscilam, e o thermald sozinho deixou a CPU
+# chegar a 99 °C: o termostato fica com o papel.
 if systemctl is-enabled --quiet thermald.service 2>/dev/null; then
   sudo systemctl disable --now thermald.service >/dev/null 2>&1
   echo "   🧹 thermald desligado: o termostato é quem controla o PL1"
+fi
+
+# Padrão do Fedora no resto: o termostato é o único desvio. O perfil de energia
+# volta ao "balanced" (estava em "performance", que fixa o governor no clock
+# máximo), pela mesma interface do menu de energia do GNOME. O turbo continua:
+# no balanced o governor schedutil sobe o clock sob demanda.
+PERFIL=(--system --dest org.freedesktop.UPower.PowerProfiles
+        --object-path /org/freedesktop/UPower/PowerProfiles)
+if command -v gdbus >/dev/null &&
+   ! gdbus call "${PERFIL[@]}" --method org.freedesktop.DBus.Properties.Get \
+     org.freedesktop.UPower.PowerProfiles ActiveProfile 2>/dev/null | grep -q "'balanced'"; then
+  sudo gdbus call "${PERFIL[@]}" --method org.freedesktop.DBus.Properties.Set \
+    org.freedesktop.UPower.PowerProfiles ActiveProfile "<'balanced'>" >/dev/null
+  echo "   ⚖️ perfil de energia de volta ao padrão do Fedora: balanced"
 fi
 
 # Os valores de fábrica, para o --desinstalar. O termostato os grava sozinho

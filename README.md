@@ -23,6 +23,15 @@ Os valores de fábrica (o PL1 de 100 W do firmware) ficam guardados em `/var/lib
 
 O número de cada `hwmon` muda entre boots, então os chips são achados pelo nome (`coretemp`, `applesmc`), nunca por caminho fixo.
 
+## O padrão do Fedora, e o único desvio
+
+Fora o que o próprio serviço faz em tempo de execução (PL1 e ventoinhas), a fedora fica no padrão do Fedora, e quem garante isso é o termostato:
+
+- o `instalar.sh` volta o perfil de energia para **balanced**, o padrão, pela mesma interface do menu de energia do GNOME (ele estava em "performance" desde 18/11/2026, com o governor preso no clock máximo). O turbo continua: no balanced, o governor `schedutil` sobe o clock sob demanda;
+- o **único desvio** é o `thermald` desligado. Ele disputa o mesmo PL1 e, sozinho, deixou a CPU chegar a 99 °C. O `instalar.sh` o desliga e o `desinstalar.sh` o religa.
+
+Nenhum outro ajuste de CPU ou temperatura deve ser feito à mão no sistema. Se precisar, ele entra aqui, no termostato, com o caminho de volta no `desinstalar.sh`.
+
 ## Ajustar
 
 Edite `/etc/termostato.toml` e rode `sudo systemctl restart termostato`. Os campos, com os padrões, estão em [`termostato.toml`](termostato.toml):
