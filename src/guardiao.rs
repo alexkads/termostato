@@ -29,6 +29,8 @@ pub struct Guardiao {
     historico: Historico,
     maos: Maos,
     segurados: Segurados,
+    /// No modo observar: o que estaria segurado, só em memória.
+    simulados: Segurados,
     executor: Executor,
     avisador: Avisador,
     visao: Visao,
@@ -78,6 +80,7 @@ impl Guardiao {
             historico,
             maos: Maos::default(),
             segurados,
+            simulados: Segurados::default(),
             executor,
             avisador,
             visao: Visao::default(),
@@ -195,12 +198,17 @@ impl Guardiao {
             }
         }
         let olhar = |c: &str| nomes.get(c).cloned();
+        let estado_das_maos = if cfg.maos.modo == Modo::Agir {
+            &self.segurados
+        } else {
+            &self.simulados
+        };
         let acoes = self.maos.decidir(
             agora_s,
             &cgroups,
             intensidade,
             pressao,
-            &self.segurados,
+            estado_das_maos,
             &olhar,
             self.nucleos,
             cfg,
@@ -243,12 +251,14 @@ impl Guardiao {
                     ),
                 }
             } else {
-                // Observando, o "devolver" não existe: nada foi segurado.
-                if matches!(acao, Acao::Devolver { .. }) {
-                    continue;
-                }
+                maos::simular(&mut self.simulados, &acao);
+                let verbo = if matches!(acao, Acao::Devolver { .. }) {
+                    "devolveria"
+                } else {
+                    "seguraria"
+                };
                 (
-                    format!("👀 (observar) seguraria {rotulo}: {o_que}"),
+                    format!("👀 (observar) {verbo} {rotulo}: {o_que}"),
                     vec![tipo, "observar"],
                 )
             };

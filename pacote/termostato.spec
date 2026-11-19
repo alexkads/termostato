@@ -82,6 +82,9 @@ fi
 %doc %{_docdir}/%{name}/CHANGELOG.md
 
 %changelog
+* Thu Nov 19 2026 Alex <alexkads@users.noreply.github.com> - 0.6.2-1
+- Modo observar anuncia uma vez cada cgroup e o devolveria com a calma, em vez de repetir a cada leitura
+
 * Thu Nov 19 2026 Alex <alexkads@users.noreply.github.com> - 0.6.1-1
 - Avisos ao Grafana esperam a rede subir no boot em vez de se perder
 - Primeiro pacote gerado no Fedora 45

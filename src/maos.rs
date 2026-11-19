@@ -357,6 +357,28 @@ fn docker_atualizar(socket: &Path, id: &str, nano_cpus: i64) -> Result<(), Strin
     }
 }
 
+/// O modo observar: registra no estado simulado o que **seria** feito, sem
+/// tocar em nada. A regra de decisão é a mesma do modo agir; sem isto, cada
+/// leitura decidia de novo segurar o mesmo cgroup (931 anotações iguais no
+/// Grafana em 19/11/2026).
+pub fn simular(simulados: &mut Segurados, acao: &Acao) {
+    match acao {
+        Acao::SegurarCpu { cgroup, .. } => {
+            simulados.cgroups.entry(cgroup.clone()).or_default().cpu_max = Some("observado".into());
+        }
+        Acao::SegurarMemoria { cgroup, .. } => {
+            simulados
+                .cgroups
+                .entry(cgroup.clone())
+                .or_default()
+                .memory_high = Some("observado".into());
+        }
+        Acao::Devolver { cgroup } => {
+            simulados.cgroups.remove(cgroup);
+        }
+    }
+}
+
 /// Ao subir: devolve o que ficou segurado de um crash.
 pub fn devolver_tudo(exec: &Executor, segurados: &mut Segurados) -> Vec<String> {
     let cgroups: Vec<String> = segurados.cgroups.keys().cloned().collect();
@@ -586,6 +608,41 @@ mod testes {
         assert_eq!(fs::read_to_string(d.join("cpu.max")).unwrap(), "max 100000");
         assert_eq!(fs::read_to_string(d.join("memory.high")).unwrap(), "max");
         assert!(lido.cgroups.is_empty());
+    }
+
+    #[test]
+    fn observar_anuncia_uma_vez_e_devolve_com_a_calma() {
+        let c = Config::default();
+        let mut m = Maos::default();
+        let mut simulados = Segurados::default();
+        let usos = [uso(BAT, 0.8, 10.0)];
+        let primeira = m.decidir(0.0, &usos, 0.5, None, &simulados, &sem_nome, 8.0, &c);
+        assert_eq!(primeira.len(), 1);
+        simular(&mut simulados, &primeira[0]);
+        // Nas leituras seguintes, com o mesmo calor, nada de novo a anunciar.
+        for t in 1..10 {
+            let a = m.decidir(
+                2.0 * f64::from(t),
+                &usos,
+                0.5,
+                None,
+                &simulados,
+                &sem_nome,
+                8.0,
+                &c,
+            );
+            assert!(a.is_empty(), "repetiu na leitura {t}: {a:?}");
+        }
+        // A máquina se acalma: depois de 60 s, "devolveria", uma vez.
+        let p = crate::pressao::Pressao::default();
+        assert!(
+            m.decidir(100.0, &[], 0.0, Some(&p), &simulados, &sem_nome, 8.0, &c)
+                .is_empty()
+        );
+        let a = m.decidir(161.0, &[], 0.0, Some(&p), &simulados, &sem_nome, 8.0, &c);
+        assert_eq!(a, [Acao::Devolver { cgroup: BAT.into() }]);
+        simular(&mut simulados, &a[0]);
+        assert!(simulados.cgroups.is_empty());
     }
 
     #[test]
