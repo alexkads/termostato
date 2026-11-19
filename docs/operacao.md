@@ -58,6 +58,25 @@ ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'
 | `ventoinhas` | `"maximo"` | `"maximo"` ou `"automatico"` (o `applesmc` decide) |
 | `escuta` | `127.0.0.1:9101` | Onde o Prometheus lê |
 
+### Os superpoderes
+
+| Campo | Padrão | O que é |
+|---|---|---|
+| `tcc_offset_c` | 8 | O chip se freia sozinho a TjMax − offset (92 °C). 0 deixa o de fábrica; máximo 15 |
+| `psi_parado_ms` / `psi_janela_ms` | 150 / 1000 | O gatilho de pressão de memória no kernel. 0 desliga |
+| `[processos] aprender` / `antecipar` | `true` / `true` | Aprender quem esquenta e frear antes quando ele aparece |
+| `[processos] suspeito_c_s` | 1,0 | Nota de calor a partir da qual o processo é suspeito |
+| `[processos] minimo_de_observacoes` | 3 | Observações de calor antes de virar suspeito |
+| `[maos] modo` | `"observar"` | `"observar"` (só mostra o que faria), `"agir"` ou `"desligado"` |
+| `[maos] cpu_a_partir_de` | 0,3 | Intensidade do freio que começa a segurar a CPU de alguém |
+| `[maos] memoria_aperto_pct` / `memoria_folga_pct` | 10 / 2 | Pressão de memória que segura e que solta |
+| `[maos] nunca` | sistema, SSH, Tailscale, Docker, monitoramento | Quem nunca é segurado |
+| `[grafana] url` / `token_arquivo` | tailnet / `/etc/termostato/grafana.token` | As anotações |
+
+**Passar as mãos para agir**, depois de ver o modo observar no painel ("O que o termostato fez", os tipos `_observado`): `[maos] modo = "agir"` no `/etc/termostato.toml` e reiniciar. Para voltar, `"observar"` e reiniciar: ao parar, ele devolve tudo o que estava segurando.
+
+**Zerar o histórico negativo:** `sudo systemctl stop termostato && sudo rm /var/lib/termostato/historico.json && sudo systemctl start termostato`.
+
 A configuração é validada ao subir. Um campo com erro de digitação, freio acima do normal, curva invertida, freio acima de 99 °C ou valores fora da faixa fazem o serviço recusar, com a razão no journal. Os nomes da 0.3 (`leituras_para_frear`, `solta_abaixo_c`, `desliga_abaixo_c`) continuam aceitos.
 
 ### Receitas
@@ -89,6 +108,13 @@ A configuração é validada ao subir. Um campo com erro de digitação, freio a
 | 🌀 `ventoinha N: piso … → … RPM` | O piso da ventoinha foi corrigido |
 | 👋 `termostato parado com o PL1 em 38 W …` | Parou, deixando o limite normal |
 | ↩️ `PL1 devolvido a 100 W` | Só no `--desinstalar` |
+| 🧠 `rustc (8 cópias, 90 % da CPU) tem histórico de +4.2 °C/s: freio antecipado…` | O freio veio antes, pelo histórico do processo |
+| 📒 `qemu-system-x86 entrou no histórico negativo…` | Um processo passou a ser suspeito |
+| 👀 `(observar) seguraria …` | O que as mãos fariam no modo observar |
+| 🤚 `…: CPU de 6.4 para 2.0 núcleos (cpu.max em 2.0 núcleos)` | As mãos seguraram alguém (modo agir) |
+| ↩️ `…: devolvido: …` | Um limite voltou ao original |
+| 🛡️ `TCC offset 0 → 8 °C: o chip se freia sozinho a 92 °C` | A proteção do chip foi gravada |
+| ⚡ `gatilho de pressão armado…` / `o kernel avisou…` | O kernel acorda o termostato quando a memória aperta |
 | ⚠️ … | Leitura ou escrita que falhou, com o motivo |
 
 ## As métricas
@@ -110,6 +136,17 @@ Em `127.0.0.1:9101/metrics`, lidas pelo Prometheus a cada 5 s:
 | `termostato_ventoinha_rpm{ventoinha, medida="atual"\|"piso"\|"maximo"}` | As ventoinhas |
 | `termostato_leituras_total`, `termostato_falhas_de_leitura_total` | A saúde do próprio termostato |
 | `termostato_info{versao}` | A versão em execução |
+| `termostato_pressao_pct{recurso, tipo}` | Pressão (PSI avg10) de memória, CPU e disco |
+| `termostato_memoria_disponivel_pct`, `termostato_swap_usado_mb` | A memória que sobra |
+| `termostato_processo_fatia{processo}`, `_copias`, `_memoria_mb` | Os 5 nomes que mais gastam CPU |
+| `termostato_processo_nota_c_s{processo}` | O histórico negativo |
+| `termostato_freio_antecipado`, `termostato_segurados` | Suspeito ativo agora; cgroups segurados agora |
+| `termostato_acoes_total{acao}` | Cada ação, por tipo (`_observado` = só no modo observar) |
+| `termostato_tcc_corte_celsius`, `termostato_tcc_offset_celsius` | Onde o próprio chip se freia |
+| `termostato_kernel_avisos_total` | Vezes que o kernel acordou o termostato |
+| `termostato_estrangulamento_total{onde}` | Estrangulamentos térmicos do chip desde o boot |
+| `termostato_dominio_watts{dominio}` | Potência dos núcleos, do gráfico e da memória |
+| `termostato_sensor_celsius{sensor}` | Os sensores do `applesmc` |
 
 ## Os alertas
 
@@ -119,6 +156,9 @@ Pelo e-mail do monitoramento (contato `email-pelo-carteiro`):
 |---|---|---|
 | **Termostato parado** | Sem métricas por 2 min | `systemctl status termostato` e `journalctl -u termostato -n 50`. O systemd o reinicia sozinho; parado 2 min quer dizer que ele cai ao subir, geralmente por configuração inválida |
 | **Freio de calor acionado há mais de 10 min** | O freio segura há 10 min | Com o limite normal no lugar, sinal de ventoinha parada ou poeira nas aletas. Confira as ventoinhas no painel. Se for carga normal, baixe o `pl1_normal_w` |
+
+| **O termostato segurou um processo ou contêiner** | As mãos agiram (só no modo agir) | Ver as marcas no painel e `journalctl -u termostato \| grep 🤚`. Para desfazer: modo observar e reiniciar |
+| **Pressão de memória alta** | Mais de 20 % por 2 min | Ver no painel quem está gastando. Compilação com muitos jobs, a VM e os contêineres do e2e juntos não cabem em 16 GB |
 
 Os alertas que já existiam no monitoramento continuam: CPU acima de 90 °C por 5 min e acima de 95 °C por 1 min.
 
