@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#
+# Instala (ou atualiza) o termostato na fedora. Roda NA fedora, de dentro do
+# clone (~/oficina/repos/termostato), com sudo sem senha:
+#
+#   ./instalar.sh
+#
+# Compila, instala o binário e o serviço, cria /etc/termostato.toml se ele não
+# existir (o que existe fica), tira os três serviços provisórios de 19/11/2026
+# e liga o Prometheus e o Grafana em ~/oficina/monitoramento. Reinstalar é
+# seguro.
+set -euo pipefail
+AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MONITORAMENTO="${MONITORAMENTO:-$HOME/oficina/monitoramento}"
+ALVO="${CARGO_TARGET_DIR:-$HOME/oficina/target/termostato}"
+
+echo "🔨 compilando (espera a trava da oficina, se a bateria ou o e2e estiverem rodando)…"
+# shellcheck disable=SC1091
+source "$HOME/.cargo/env"
+(
+  exec 9>"$HOME/oficina/.trava-compilacao"
+  flock 9
+  cd "$AQUI"
+  CARGO_TARGET_DIR="$ALVO" CARGO_BUILD_JOBS=2 nice -n 10 cargo build --release -q
+)
+
+echo "📦 instalando…"
+sudo install -m 755 "$ALVO/release/termostato" /usr/local/bin/termostato
+sudo install -m 644 "$AQUI/termostato.service" /etc/systemd/system/termostato.service
+if [ ! -f /etc/termostato.toml ]; then
+  sudo install -m 644 "$AQUI/termostato.toml" /etc/termostato.toml
+else
+  echo "   /etc/termostato.toml já existe: fica como está"
+fi
+
+# Os provisórios de 19/11/2026: o termostato faz o trabalho dos três.
+for antigo in cpu-folego-longo freio-de-calor ventoinhas-no-maximo; do
+  if [ -f "/etc/systemd/system/$antigo.service" ]; then
+    sudo systemctl disable --now "$antigo.service" >/dev/null 2>&1 || true
+    sudo rm -f "/etc/systemd/system/$antigo.service"
+    echo "   🧹 $antigo.service removido"
+  fi
+done
+sudo rm -f /usr/local/bin/freio-de-calor /usr/local/bin/ventoinhas-no-maximo
+
+sudo systemctl daemon-reload
+sudo systemctl enable termostato.service >/dev/null 2>&1
+sudo systemctl restart termostato.service
+sleep 3
+systemctl is-active --quiet termostato || { journalctl -u termostato -n 20 --no-pager; exit 1; }
+
+if [ -d "$MONITORAMENTO" ]; then
+  echo "📈 ligando ao Prometheus e ao Grafana…"
+  if ! grep -q "job_name: termostato" "$MONITORAMENTO/prometheus.yml"; then
+    cat >> "$MONITORAMENTO/prometheus.yml" <<'EOF'
+  - job_name: termostato
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["127.0.0.1:9101"]
+        labels: { maquina: macpro-i7-alex }
+EOF
+  fi
+  install -m 644 "$AQUI/grafana/termostato.json" "$MONITORAMENTO/grafana/dashboards/termostato.json"
+  install -m 644 "$AQUI/grafana/alerta-termostato.yml" "$MONITORAMENTO/grafana/provisioning/alerting/termostato.yml"
+  (cd "$MONITORAMENTO" && docker compose restart prometheus grafana >/dev/null)
+fi
+
+curl -fsS 127.0.0.1:9101/metrics | grep -E '^termostato_(temperatura|limite_watts\{limite="pl1"\}|freio_puxado)'
+echo "✅ termostato instalado: journalctl -u termostato -f para acompanhar"

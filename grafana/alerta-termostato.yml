@@ -1,0 +1,67 @@
+apiVersion: 1
+
+# Usa o ponto de contato que já existe no monitoramento da fedora
+# (email-pelo-carteiro, em temperatura.yml).
+groups:
+  - orgId: 1
+    name: termostato
+    folder: Fedora
+    interval: 30s
+    rules:
+      - uid: termostato-parado
+        title: Termostato parado (sem métricas por 2 min)
+        condition: C
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        labels: { gravidade: critica }
+        annotations:
+          summary: "O termostato da fedora não responde: a CPU está sem limite de potência e sem freio de calor."
+          description: "Veja `systemctl status termostato` e `journalctl -u termostato -n 50`. O systemd o reinicia sozinho (Restart=always); parado por 2 min quer dizer que ele cai ao subir."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 120, to: 0 }
+            model:
+              refId: A
+              expr: 'max(up{job="termostato"})'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [ { evaluator: { type: lt, params: [1] } } ]
+
+      - uid: termostato-freio-longo
+        title: Freio de calor puxado há mais de 10 min
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { gravidade: aviso }
+        annotations:
+          summary: "A CPU da fedora passa de 92 °C mesmo com o PL1 em 38 W: o freio segura há 10 minutos."
+          description: "Com o limite de potência no lugar, isso indica ventoinha parada ou poeira nas aletas. Veja o painel Termostato (ventoinhas) e baixe `pl1_normal_w` em /etc/termostato.toml se for carga normal."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              expr: 'max(termostato_freio_puxado)'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [ { evaluator: { type: gt, params: [0] } } ]

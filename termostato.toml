@@ -1,0 +1,25 @@
+# Configuração do termostato. Instalado em /etc/termostato.toml; depois de
+# mudar, `sudo systemctl restart termostato`. Linha apagada = valor padrão.
+
+# Potência sustentada da CPU (RAPL PL1), em watts. O firmware da Apple deixa
+# 100 W, que é sem limite. Desça para 32 se ainda esquentar; suba para 42 se
+# sobrar folga. O turbo curto (PL2, 125 W) fica livre: a arrancada não muda.
+pl1_normal_w = 38
+
+# O freio de calor: com a CPU em `freio_acima_c` ou mais por
+# `leituras_para_frear` leituras seguidas, o PL1 cai para `pl1_freio_w`. Ele
+# só solta abaixo de `solta_abaixo_c`.
+pl1_freio_w = 25
+freio_acima_c = 92
+leituras_para_frear = 5
+solta_abaixo_c = 80
+
+# Segundos entre leituras.
+intervalo_s = 2
+
+# "maximo": o piso de cada ventoinha vai ao máximo dela (o MacBook sopra antes
+# de esquentar). "automatico": o applesmc decide sozinho.
+ventoinhas = "maximo"
+
+# Onde o Prometheus lê. Só no loopback: o serviço roda como root.
+escuta = "127.0.0.1:9101"

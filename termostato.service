@@ -1,0 +1,20 @@
+[Unit]
+Description=Termostato da fedora: limite de potência da CPU, freio de calor, ventoinhas e métricas
+Documentation=https://github.com/alexkads/termostato
+# Depois deles, para o PL1 e as ventoinhas que valem serem os do termostato.
+After=tuned.service thermald.service systemd-modules-load.service
+
+[Service]
+ExecStart=/usr/local/bin/termostato /etc/termostato.toml
+Restart=always
+RestartSec=3
+Nice=-5
+# Só o que ele precisa: ler o hardware e gravar no /sys.
+ProtectSystem=strict
+ReadWritePaths=/sys
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
