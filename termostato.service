@@ -12,6 +12,8 @@ Nice=-5
 # Só o que ele precisa: ler o hardware e gravar no /sys.
 ProtectSystem=strict
 ReadWritePaths=/sys
+# /var/lib/termostato: os valores de fábrica, para o --desinstalar.
+StateDirectory=termostato
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes

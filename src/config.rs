@@ -41,6 +41,9 @@ pub struct Config {
     pub escuta: String,
     /// A raiz do sysfs. Só os testes mudam isto.
     pub sysfs: String,
+    /// Onde ficam os valores de fábrica (`fabrica.toml`), para o
+    /// `--desinstalar`. É o `StateDirectory` do serviço.
+    pub estado: String,
 }
 
 impl Default for Config {
@@ -55,6 +58,7 @@ impl Default for Config {
             ventoinhas: Ventoinhas::Maximo,
             escuta: "127.0.0.1:9101".into(),
             sysfs: "/sys".into(),
+            estado: "/var/lib/termostato".into(),
         }
     }
 }

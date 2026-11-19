@@ -17,7 +17,9 @@ A ideia é não precisar mexer no sistema operacional: tudo o que se ajusta est�
 3. Garante o PL1 alvo (38 W, ou 25 W com o freio puxado) e o piso das ventoinhas no máximo.
 4. Mede a potência real (RAPL `energy_uj`) e a frequência média, e atualiza `/metrics`.
 
-Ao parar (SIGTERM, SIGINT), devolve o PL1 e os pisos das ventoinhas que encontrou ao subir. O systemd o reinicia sozinho (`Restart=always`).
+Ao parar (SIGTERM, SIGINT ou crash), o PL1 fica no valor seguro (38 W) e as ventoinhas ficam como estão: um reinício nunca deixa a máquina sem limite no meio de uma compilação. O systemd o reinicia sozinho (`Restart=always`).
+
+Os valores de fábrica (o PL1 de 100 W do firmware) ficam guardados em `/var/lib/termostato/fabrica.toml` e só voltam com o `desinstalar.sh`, que roda `termostato --desinstalar`, remove o serviço, religa o `thermald` e tira o termostato do Prometheus e do Grafana.
 
 O número de cada `hwmon` muda entre boots, então os chips são achados pelo nome (`coretemp`, `applesmc`), nunca por caminho fixo.
 

@@ -4,10 +4,15 @@
 //! operacional: limite de potência sustentada (RAPL PL1), freio de calor,
 //! piso das ventoinhas e as métricas que o Prometheus lê em `/metrics`.
 //!
-//! Ao parar (SIGTERM, SIGINT), devolve o PL1 e os pisos das ventoinhas que
-//! encontrou ao subir.
+//! Ao parar (SIGTERM, SIGINT, crash), o PL1 fica no valor seguro: um reinício
+//! nunca deixa a máquina sem limite. Os valores de fábrica só voltam com
+//! `termostato --desinstalar` (ver `fabrica.rs`).
+//!
+//!   termostato [config]                 # o serviço
+//!   termostato --desinstalar [config]   # devolve a fábrica e apaga o estado
 
 mod config;
+mod fabrica;
 mod freio;
 mod hardware;
 mod metricas;
@@ -34,11 +39,7 @@ fn uw_para_w(uw: u64) -> f64 {
     uw as f64 / 1_000_000.0
 }
 
-/// O que estava no hardware antes de o termostato subir.
-struct Original {
-    pl1_uw: Option<u64>,
-    pisos: Vec<(usize, u64)>,
-}
+use fabrica::{Fabrica, Piso};
 
 struct Estado {
     retrato: Retrato,
@@ -46,18 +47,28 @@ struct Estado {
 }
 
 fn main() {
-    let caminho = std::env::args()
-        .nth(1)
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let desinstalar = args.first().is_some_and(|a| a == "--desinstalar");
+    if desinstalar {
+        args.remove(0);
+    }
+    let caminho = args
+        .first()
         .map_or_else(|| PathBuf::from(CONFIG_PADRAO), PathBuf::from);
-    if let Err(e) = rodar(&caminho) {
+    let resultado = if desinstalar {
+        devolver_a_fabrica(&caminho)
+    } else {
+        rodar(&caminho)
+    };
+    if let Err(e) = resultado {
         eprintln!("❌ {e}");
         std::process::exit(1);
     }
 }
 
 /// A primeira linha do journal: o que este termostato vai fazer.
-fn anunciar(cfg: &Config, original: &Original, ventoinhas: usize) {
-    let achado = original
+fn anunciar(cfg: &Config, achado: &Fabrica, ventoinhas: usize) {
+    let achado = achado
         .pl1_uw
         .map_or_else(|| "?".into(), |u| uw_para_w(u).to_string());
     let modo = match cfg.ventoinhas {
@@ -89,15 +100,27 @@ fn rodar(caminho: &Path) -> Result<(), String> {
     };
     let ventoinhas = hardware::ventoinhas(&sysfs);
 
-    let original = Original {
+    let achado = Fabrica {
         pl1_uw: rapl.as_ref().and_then(|r| r.pl1_uw().ok()),
         pisos: ventoinhas
             .iter()
-            .enumerate()
-            .filter_map(|(i, v)| v.piso().ok().map(|p| (i, p)))
+            .filter_map(|v| {
+                v.piso().ok().map(|rpm| Piso {
+                    ventoinha: v.numero.clone(),
+                    rpm,
+                })
+            })
             .collect(),
     };
-    anunciar(&cfg, &original, ventoinhas.len());
+    anunciar(&cfg, &achado, ventoinhas.len());
+    match fabrica::guardar_se_faltar(Path::new(&cfg.estado), &achado) {
+        Ok(true) => println!(
+            "💾 valores de fábrica guardados em {} (só o --desinstalar os devolve)",
+            fabrica::arquivo(Path::new(&cfg.estado)).display()
+        ),
+        Ok(false) => {}
+        Err(e) => eprintln!("⚠️ não guardei os valores de fábrica: {e}"),
+    }
 
     let parar = Arc::new(AtomicBool::new(false));
     for sinal in [signal_hook::consts::SIGTERM, signal_hook::consts::SIGINT] {
@@ -161,7 +184,7 @@ fn rodar(caminho: &Path) -> Result<(), String> {
         esperar(intervalo, &parar);
     }
 
-    devolver(rapl.as_ref(), &ventoinhas, &original);
+    parar_seguro(rapl.as_ref(), &cfg);
     Ok(())
 }
 
@@ -260,21 +283,46 @@ fn esperar(intervalo: Duration, parar: &AtomicBool) {
     }
 }
 
-fn devolver(rapl: Option<&Rapl>, ventoinhas: &[Ventoinha], original: &Original) {
-    if let (Some(r), Some(uw)) = (rapl, original.pl1_uw) {
-        match r.definir_pl1_uw(uw) {
-            Ok(()) => println!("↩️ PL1 devolvido a {} W", uw_para_w(uw)),
-            Err(e) => eprintln!("⚠️ não devolvi o PL1: {e}"),
+/// Ao parar: o PL1 vai ao valor seguro (se o freio estava puxado, sai dos
+/// 25 W) e as ventoinhas ficam como estão. Nada volta à fábrica aqui.
+fn parar_seguro(rapl: Option<&Rapl>, cfg: &Config) {
+    if let Some(r) = rapl
+        && let Err(e) = r.definir_pl1_uw(w_para_uw(cfg.pl1_normal_w))
+    {
+        eprintln!("⚠️ PL1 ao parar: {e}");
+    }
+    println!(
+        "👋 termostato parado com o PL1 em {} W (a fábrica só volta com --desinstalar)",
+        cfg.pl1_normal_w
+    );
+}
+
+/// `--desinstalar`: devolve o PL1 e os pisos guardados na primeira subida e
+/// apaga o estado. Sem estado, não há o que devolver, e o hardware fica.
+fn devolver_a_fabrica(caminho: &Path) -> Result<(), String> {
+    let cfg = Config::ler(caminho)?;
+    let estado = PathBuf::from(&cfg.estado);
+    let Some(f) = fabrica::ler(&estado)? else {
+        println!("sem valores de fábrica guardados: nada a devolver");
+        return Ok(());
+    };
+    devolver(&PathBuf::from(&cfg.sysfs), &f)?;
+    fabrica::apagar(&estado)
+}
+
+fn devolver(sysfs: &Path, f: &Fabrica) -> Result<(), String> {
+    if let Some(uw) = f.pl1_uw {
+        Rapl::achar(sysfs)?.definir_pl1_uw(uw)?;
+        println!("↩️ PL1 devolvido a {} W", uw_para_w(uw));
+    }
+    let ventoinhas = hardware::ventoinhas(sysfs);
+    for p in &f.pisos {
+        if let Some(v) = ventoinhas.iter().find(|v| v.numero == p.ventoinha) {
+            v.definir_piso(p.rpm)?;
+            println!("↩️ ventoinha {}: piso devolvido a {} RPM", v.numero, p.rpm);
         }
     }
-    for &(i, piso) in &original.pisos {
-        if let Some(v) = ventoinhas.get(i)
-            && let Err(e) = v.definir_piso(piso)
-        {
-            eprintln!("⚠️ não devolvi o piso da ventoinha {}: {e}", v.numero);
-        }
-    }
-    println!("👋 termostato parado");
+    Ok(())
 }
 
 fn servir(ouvinte: &TcpListener, estado: &Mutex<Estado>, validade: Duration) {
@@ -364,22 +412,57 @@ mod testes {
     }
 
     #[test]
-    fn ventoinha_vai_ao_maximo_e_volta_ao_original() {
+    fn parar_deixa_o_valor_seguro_e_nao_a_fabrica() {
         let d = tempfile::tempdir().unwrap();
-        hardware::sysfs_de_teste::montar(d.path(), 70);
-        let vs = hardware::ventoinhas(d.path());
-        let original = Original {
-            pl1_uw: None,
-            pisos: vec![(0, 2000), (1, 2000)],
-        };
+        hardware::sysfs_de_teste::montar(d.path(), 95);
+        let r = Rapl::achar(d.path()).unwrap();
+        // O freio estava puxado (25 W) quando o SIGTERM chegou.
+        r.definir_pl1_uw(25_000_000).unwrap();
+        parar_seguro(Some(&r), &Config::default());
+        assert_eq!(
+            r.pl1_uw().unwrap(),
+            38_000_000,
+            "nem 25 W nem os 100 W de fábrica"
+        );
+    }
+
+    #[test]
+    fn desinstalar_devolve_a_fabrica_e_apaga_o_estado() {
+        let sys = tempfile::tempdir().unwrap();
+        let est = tempfile::tempdir().unwrap();
+        hardware::sysfs_de_teste::montar(sys.path(), 70);
+        let vs = hardware::ventoinhas(sys.path());
         let mut retrato = Retrato::default();
         for v in &vs {
             cuidar_da_ventoinha(v, &mut retrato);
         }
         assert_eq!(vs[0].piso().unwrap(), 6156);
-        assert_eq!(vs[1].piso().unwrap(), 5700);
-        devolver(None, &vs, &original);
+        let f = Fabrica {
+            pl1_uw: Some(100_000_000),
+            pisos: vec![Piso {
+                ventoinha: "1".into(),
+                rpm: 2000,
+            }],
+        };
+        fabrica::guardar_se_faltar(est.path(), &f).unwrap();
+        let toml = est.path().join("t.toml");
+        std::fs::write(
+            &toml,
+            format!(
+                "sysfs = {:?}\nestado = {:?}\n",
+                sys.path().display().to_string(),
+                est.path().display().to_string()
+            ),
+        )
+        .unwrap();
+        devolver_a_fabrica(&toml).unwrap();
+        assert_eq!(
+            Rapl::achar(sys.path()).unwrap().pl1_uw().unwrap(),
+            100_000_000
+        );
         assert_eq!(vs[0].piso().unwrap(), 2000);
+        assert_eq!(vs[1].piso().unwrap(), 5700, "sem piso guardado, fica");
+        assert_eq!(fabrica::ler(est.path()).unwrap(), None);
     }
 
     #[test]

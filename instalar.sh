@@ -51,6 +51,16 @@ if systemctl is-enabled --quiet thermald.service 2>/dev/null; then
   echo "   🧹 thermald desligado: o termostato é quem controla o PL1"
 fi
 
+# Os valores de fábrica, para o --desinstalar. O termostato os grava sozinho
+# na primeira subida; numa máquina em que ele (ou os provisórios) já rodou, o
+# PL1 lido seria o nosso, então semeia o do firmware da Apple, 100 W. Os pisos
+# das ventoinhas de fábrica não são conhecidos e ficam de fora.
+if ! sudo test -f /var/lib/termostato/fabrica.toml; then
+  sudo install -d -m 755 /var/lib/termostato
+  echo "pl1_uw = 100000000" | sudo tee /var/lib/termostato/fabrica.toml >/dev/null
+  echo "   💾 fábrica semeada: PL1 100 W (firmware da Apple)"
+fi
+
 sudo systemctl daemon-reload
 sudo systemctl enable termostato.service >/dev/null 2>&1
 sudo systemctl restart termostato.service
