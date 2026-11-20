@@ -75,10 +75,26 @@ A curva é aplicada à **maior** entre a temperatura de agora e a prevista.
 
 Isso substitui a histerese do freio antigo. Sem calor novo, o freio vai soltando aos poucos; se o calor volta no meio da subida, a curva freia de novo na hora. Não há efeito sanfona.
 
+### 4. O alvo (`termostato CPU50C`)
+
+Com `alvo_c` acima de 0, um controle **integral** trabalha junto com a curva:
+
+- Acima do alvo (a temperatura de **agora**), o PL1 do alvo desce `alvo_ganho_w_por_c_s` × erro por segundo: 10 °C acima, com o ganho 0,5, são 5 W/s.
+- Abaixo do alvo, sobe no máximo `subida_w_por_s`, como o freio.
+- Fica entre `pl1_minimo_w` (8 W) e `pl1_normal_w`. Vale o **menor** entre ele e a curva, então a curva continua mandando quando freia mais (a 92 °C, 25 W de uma vez).
+
+O alvo não usa a previsão, que fica com a curva. Na medição de 19/11/2026, com o build do VintageLightbox na VM Windows e `CPU65C`, a previsão fazia o controle se assustar com os picos curtos do Haswell: a CPU ficava em 57–66 °C, abaixo do alvo, e o PL1 caía a 8 W num tranco. Sem ela, ficou em 60–69 °C, em volta dos 65, com o PL1 estável entre 14 e 21 W.
+
+O piso de 8 W tem limite físico. Com `CPU50C` e o build na VM, a CPU ficou em 51–62 °C. Parada, ela já fica em ~48 °C, e a arrancada curta (PL2) segue livre.
+
+É integral, e não uma segunda curva, porque o PL1 que segura 50 °C depende da carga: 20 W numa build, 10 W num `rustc` sozinho. A curva fixa erraria para um lado ou para o outro; o integral acha o valor sozinho e o acompanha quando a carga muda.
+
 ### Estados no journal
 
 - 🔥 quando o PL1 sai do limite normal, com a temperatura de agora, a prevista e a tendência. Exemplo: `🔥 78 °C agora, 90 °C previstos em 10 s (+1.2 °C/s): freio de calor acionado, PL1 em 28.3 W`.
+- 🎯 quando é o alvo que aciona o freio: `🎯 58 °C, acima do alvo de 50 °C: freio acionado, PL1 em 34.0 W`.
 - ❄️ quando volta ao limite normal.
+- 🎛️ quando um ajuste (`termostato chave=valor`) entra em vigor: `🎛️ ajuste: alvo_c = 50.0`.
 
 A regra está em [`freio.rs`](../src/freio.rs), sem nenhum acesso a hardware, e é testada leitura a leitura com tempo simulado.
 

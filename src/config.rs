@@ -151,6 +151,14 @@ pub struct Config {
     pub previsao_s: f64,
     /// Quanto o PL1 sobe por segundo ao soltar o freio. Frear é na hora.
     pub subida_w_por_s: f64,
+    /// Alvo de temperatura (°C): o termostato segura a CPU nele, baixando o
+    /// PL1 até o `pl1_minimo_w`. 0 = sem alvo, só a curva. Atalho na linha de
+    /// comando: `sudo termostato CPU50C` (ver `ajustes.rs`).
+    pub alvo_c: f64,
+    /// O PL1 mais baixo a que o alvo pode levar.
+    pub pl1_minimo_w: f64,
+    /// Quanto o PL1 desce por segundo para cada °C acima do alvo.
+    pub alvo_ganho_w_por_c_s: f64,
     /// Intervalo entre leituras, em segundos.
     pub intervalo_s: f64,
     pub ventoinhas: Ventoinhas,
@@ -192,6 +200,9 @@ impl Default for Config {
             janela_leituras: 5,
             previsao_s: 10.0,
             subida_w_por_s: 0.5,
+            alvo_c: 0.0,
+            pl1_minimo_w: 8.0,
+            alvo_ganho_w_por_c_s: 0.5,
             intervalo_s: 2.0,
             ventoinhas: Ventoinhas::Maximo,
             escuta: "127.0.0.1:9101".into(),
@@ -221,6 +232,34 @@ impl Config {
         };
         config.validar()?;
         Ok(config)
+    }
+
+    /// O alvo de temperatura e o piso a que ele pode levar o PL1.
+    fn validar_alvo(&self) -> Result<(), String> {
+        if self.alvo_c != 0.0
+            && !(crate::ajustes::ALVO_MINIMO_C..=crate::ajustes::ALVO_MAXIMO_C)
+                .contains(&self.alvo_c)
+        {
+            return Err(format!(
+                "alvo_c = {} fora de {} a {} °C (0 = sem alvo)",
+                self.alvo_c,
+                crate::ajustes::ALVO_MINIMO_C,
+                crate::ajustes::ALVO_MAXIMO_C
+            ));
+        }
+        if !(3.0..=self.pl1_freio_w).contains(&self.pl1_minimo_w) {
+            return Err(format!(
+                "pl1_minimo_w = {} precisa ficar entre 3 W e o pl1_freio_w ({})",
+                self.pl1_minimo_w, self.pl1_freio_w
+            ));
+        }
+        if !(0.01..=10.0).contains(&self.alvo_ganho_w_por_c_s) {
+            return Err(format!(
+                "alvo_ganho_w_por_c_s = {} fora de 0,01 a 10",
+                self.alvo_ganho_w_por_c_s
+            ));
+        }
+        Ok(())
     }
 
     /// Recusa o que deixaria a máquina sem proteção ou o freio sem sentido.
@@ -267,6 +306,7 @@ impl Config {
                 self.subida_w_por_s
             ));
         }
+        self.validar_alvo()?;
         if !(0.5..=60.0).contains(&self.intervalo_s) {
             return Err(format!(
                 "intervalo_s = {} fora de 0,5 a 60 s",

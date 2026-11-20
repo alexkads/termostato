@@ -2,6 +2,13 @@
 
 Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs/decisoes.md) e a narrativa em [docs/historia.md](docs/historia.md).
 
+## 0.7.0: ajustes na hora e o alvo de temperatura
+
+- **`sudo termostato chave=valor …`** muda qualquer parâmetro com o serviço rodando, sem reiniciar: vale em até 2 s, sobrevive a um reinício e passa pela mesma validação do toml. `termostato ajustes` mostra o que está em vigor, e `termostato padrao` tira tudo.
+- **`sudo termostato CPU50C`**: alvo de temperatura. Um controle integral baixa o PL1 até 8 W se precisar, para segurar a CPU no alvo; `CPULIVRE` tira.
+- Novos parâmetros: `alvo_c`, `pl1_minimo_w` e `alvo_ganho_w_por_c_s`. Novas métricas: `termostato_alvo_celsius` e `termostato_ajustes`.
+- Trocar as mãos de agir para outro modo devolve na hora o que estava segurado.
+
 ## 0.6.2: o observar sem repetir
 
 - No modo observar, as mãos simulam o estado: cada cgroup é anunciado **uma vez** ("seguraria") e de novo só ao se acalmar ("devolveria"), como o modo agir faria. Antes, cada leitura decidia de novo segurar o mesmo cgroup: foram 931 anotações iguais no Grafana em 19/11/2026.
