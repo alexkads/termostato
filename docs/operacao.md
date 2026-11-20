@@ -101,9 +101,10 @@ ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'
 | `intervalo_s` | 2 | Segundos entre leituras |
 | `ventoinhas` | `"curva"` | `"curva"` (o piso segue a temperatura), `"maximo"` ou `"automatico"` (o `applesmc` decide) |
 | `ventoinhas_calma_ate_c` | 60 | Curva: até aqui, o piso fica no mínimo |
-| `ventoinhas_maximo_em_c` | 80 | Curva: daqui em diante (ou com o freio), o piso vai ao máximo |
+| `ventoinhas_maximo_em_c` | 80 | Curva: com a média daqui em diante, o piso vai ao máximo |
 | `ventoinhas_minimo_rpm` | 2000 | Curva: o piso mínimo |
-| `ventoinhas_descida_rpm_por_s` | 50 | Curva: quão rápido o piso desce ao esfriar (subir é na hora) |
+| `ventoinhas_descida_rpm_por_s` | 50 | Curva: quão rápido o piso desce ao esfriar |
+| `ventoinhas_suavizacao_s` | 20 | Curva: a média que a curva olha; um pico mais curto que isso mexe pouco na ventoinha (0 = a temperatura de agora) |
 | `escuta` | `127.0.0.1:9101` | Onde o Prometheus lê |
 
 ### Os superpoderes
@@ -136,7 +137,7 @@ A configuração é validada ao subir. Um campo com erro de digitação, freio a
 | Frear mais cedo | `freio_comeca_c = 75` ou `previsao_s = 15` |
 | Previsão menos nervosa | `janela_leituras = 8` (reta por 16 s) |
 | Voltar ao normal mais rápido | `subida_w_por_s = 1` |
-| Ventoinhas mais silenciosas | `ventoinhas_calma_ate_c=65` (começam a subir mais tarde) ou `ventoinhas = "automatico"` (o pico de temperatura sobe) |
+| Ventoinhas mais silenciosas | `ventoinhas_calma_ate_c=65` (começam a subir mais tarde) ou `ventoinhas_suavizacao_s=40` (ignoram picos mais longos) ou `ventoinhas = "automatico"` (o pico de temperatura sobe) |
 | Ventoinhas sempre no máximo | `ventoinhas = "maximo"` |
 
 ## Acompanhar

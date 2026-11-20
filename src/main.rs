@@ -308,7 +308,7 @@ fn rodar(caminho: &Path) -> Result<(), String> {
                 // Sem leitura de temperatura, a curva não sabe: sopra tudo.
                 let t = retrato.temperatura_c.unwrap_or(f64::INFINITY);
                 for (v, s) in ventoinhas.iter().zip(sopros.iter_mut()) {
-                    soprar_pela_curva(v, s, t, freio.acionado(), dt, &cfg, &mut retrato);
+                    soprar_pela_curva(v, s, t, dt, &cfg, &mut retrato);
                 }
             }
         }
@@ -582,7 +582,6 @@ fn soprar_pela_curva(
     v: &Ventoinha,
     s: &mut sopro::Sopro,
     t: f64,
-    freio_acionado: bool,
     dt: f64,
     cfg: &Config,
     retrato: &mut Retrato,
@@ -596,20 +595,21 @@ fn soprar_pela_curva(
         }
     };
     let minimo = cfg.ventoinhas_minimo_rpm.min(max);
-    let novo = s.decidir(t, freio_acionado, dt, minimo, max, cfg);
+    let novo = s.decidir(t, dt, minimo, max, cfg);
+    let media = s.suavizada().unwrap_or(t);
     if novo == piso {
         return;
     }
     match v.definir_piso(novo) {
         Ok(()) if novo == max => {
             println!(
-                "🌀 ventoinha {}: piso {piso} → {novo} RPM (máximo, {t:.0} °C)",
+                "🌀 ventoinha {}: piso {piso} → {novo} RPM (máximo, média de {media:.0} °C)",
                 v.numero
             );
         }
         Ok(()) if novo == minimo => {
             println!(
-                "🌀 ventoinha {}: piso {piso} → {novo} RPM (mínimo, {t:.0} °C)",
+                "🌀 ventoinha {}: piso {piso} → {novo} RPM (mínimo, média de {media:.0} °C)",
                 v.numero
             );
         }
@@ -837,14 +837,18 @@ mod testes {
         let mut s = sopro::Sopro::default();
         // Vinha do modo máximo: fria, cai ao mínimo (primeira decisão, sem memória).
         vs[0].definir_piso(6156).unwrap();
-        soprar_pela_curva(&vs[0], &mut s, 50.0, false, 2.0, &cfg, &mut retrato);
+        soprar_pela_curva(&vs[0], &mut s, 50.0, 2.0, &cfg, &mut retrato);
         assert_eq!(vs[0].piso().unwrap(), 2000);
-        // Esquentou: máximo na mesma leitura.
-        soprar_pela_curva(&vs[0], &mut s, 85.0, false, 2.0, &cfg, &mut retrato);
+        // Carga longa: chega ao máximo.
+        for _ in 0..30 {
+            soprar_pela_curva(&vs[0], &mut s, 90.0, 2.0, &cfg, &mut retrato);
+        }
         assert_eq!(vs[0].piso().unwrap(), 6156);
-        // Esfriou: desce devagar, não de uma vez.
-        soprar_pela_curva(&vs[0], &mut s, 50.0, false, 2.0, &cfg, &mut retrato);
-        assert_eq!(vs[0].piso().unwrap(), 6100);
+        // Sem sensor: máximo.
+        vs[0].definir_piso(2000).unwrap();
+        let mut s = sopro::Sopro::default();
+        soprar_pela_curva(&vs[0], &mut s, f64::INFINITY, 2.0, &cfg, &mut retrato);
+        assert_eq!(vs[0].piso().unwrap(), 6156);
         assert_eq!(retrato.falhas_de_leitura, 0);
     }
 

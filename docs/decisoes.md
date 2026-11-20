@@ -84,8 +84,9 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 ## 14b. Ventoinhas pela curva
 
 **Contexto.** Com o piso sempre no máximo, a fedora ficava com as ventoinhas a ~6000 RPM mesmo parada, a 45–55 °C.
-**Decisão.** O padrão passa a ser `ventoinhas = "curva"`: mínimo até 60 °C, máximo a partir de 80 °C (onde o freio começa), em linha reta entre os dois; máximo também com o freio acionado ou sem leitura de temperatura. Sobe na hora e desce a 50 RPM/s, gravando em degraus de 100 RPM.
-**Por quê.** O dono: *"Eu gostaria que o cooler não ficasse acelerado sem necessidade"*. O motivo da decisão 14 (soprar antes de esquentar) continua de pé onde importa: a curva chega ao máximo **antes** do freio, e subir é imediato. Abaixo de 60 °C não há pico a evitar, só barulho e poeira. Descer devagar é o mesmo truque do freio contra a sanfona.
+**Decisão.** O padrão passa a ser `ventoinhas = "curva"`: mínimo até 60 °C, máximo a partir de 80 °C (onde o freio começa), em linha reta entre os dois, sobre a **média móvel de 20 s** da temperatura; máximo sem leitura de temperatura. Desce a 50 RPM/s, gravando em degraus de 100 RPM.
+**A primeira versão seguia o freio** (freio acionado → máximo) e a temperatura de agora. Instalada na fedora, cada arrancada do turbo (68–77 °C por poucos segundos, previsão de 88–101 °C) acionava o freio pela previsão e punha as ventoinhas no máximo, com a CPU de volta a 47–55 °C logo depois. A média separa o pico, que o freio segura cortando a potência na hora, do calor que fica, que é o trabalho da ventoinha.
+**Por quê.** O dono: *"Eu gostaria que o cooler não ficasse acelerado sem necessidade"*. O motivo da decisão 14 (soprar antes de esquentar) continua de pé onde importa: a curva chega ao máximo **antes** do freio terminar de apertar, e uma carga longa leva a média a 80 °C em menos de um minuto. Abaixo de 60 °C não há pico a evitar, só barulho e poeira. Descer devagar é o mesmo truque do freio contra a sanfona.
 
 ## 15. HTTP e Prometheus à mão
 

@@ -13,7 +13,7 @@ Este documento acompanha o caminho inteiro: do arquivo de configuração até o 
 | [`src/main.rs`](../src/main.rs) | O laço a cada `intervalo_s`, o servidor HTTP do `/metrics`, os sinais e o `--desinstalar` |
 | [`src/config.rs`](../src/config.rs) | Lê e valida o `/etc/termostato.toml`; arquivo ausente = padrões |
 | [`src/freio.rs`](../src/freio.rs) | A regra do freio de calor, pura (sem hardware), com histerese |
-| [`src/sopro.rs`](../src/sopro.rs) | A curva das ventoinhas, pura (sem hardware): sobe na hora, desce devagar |
+| [`src/sopro.rs`](../src/sopro.rs) | A curva das ventoinhas, pura (sem hardware): segue a temperatura média, desce devagar |
 | [`src/hardware.rs`](../src/hardware.rs) | Sensor, RAPL, ventoinhas e frequência, pelo sysfs |
 | [`src/fabrica.rs`](../src/fabrica.rs) | Os valores de fábrica, gravados uma vez, para o `--desinstalar` |
 | [`src/metricas.rs`](../src/metricas.rs) | O retrato de cada leitura e o texto do Prometheus |

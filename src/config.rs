@@ -180,8 +180,11 @@ pub struct Config {
     pub ventoinhas_maximo_em_c: f64,
     /// Modo curva: o piso mínimo (o de fábrica do MacBookPro11,2 é 2000 RPM).
     pub ventoinhas_minimo_rpm: u64,
-    /// Modo curva: quão rápido o piso desce quando a CPU esfria. Subir é na hora.
+    /// Modo curva: quão rápido o piso desce quando a CPU esfria.
     pub ventoinhas_descida_rpm_por_s: f64,
+    /// Modo curva: a constante de tempo (s) da média que a curva olha. Um pico
+    /// mais curto que isso mexe pouco na ventoinha. 0 = a temperatura de agora.
+    pub ventoinhas_suavizacao_s: f64,
     /// Onde o `/metrics` escuta. Só no loopback: o serviço roda como root.
     pub escuta: String,
     /// A raiz do sysfs. Só os testes mudam isto.
@@ -230,6 +233,7 @@ impl Default for Config {
             ventoinhas_maximo_em_c: 80.0,
             ventoinhas_minimo_rpm: 2000,
             ventoinhas_descida_rpm_por_s: 50.0,
+            ventoinhas_suavizacao_s: 20.0,
             escuta: "127.0.0.1:9101".into(),
             sysfs: "/sys".into(),
             estado: "/var/lib/termostato".into(),
@@ -312,6 +316,12 @@ impl Config {
             return Err(format!(
                 "ventoinhas_descida_rpm_por_s = {} fora de 1 a 10000",
                 self.ventoinhas_descida_rpm_por_s
+            ));
+        }
+        if !(0.0..=300.0).contains(&self.ventoinhas_suavizacao_s) {
+            return Err(format!(
+                "ventoinhas_suavizacao_s = {} fora de 0 a 300 s",
+                self.ventoinhas_suavizacao_s
             ));
         }
         Ok(())

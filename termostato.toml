@@ -30,16 +30,17 @@ alvo_ganho_w_por_c_s = 0.5
 # Segundos entre leituras.
 intervalo_s = 2
 
-# "curva": o piso acompanha a temperatura. Fica no mínimo até
+# "curva": o piso acompanha a temperatura média (de ventoinhas_suavizacao_s),
+# para uma arrancada curta do turbo não acelerar o cooler. Fica no mínimo até
 # ventoinhas_calma_ate_c, sobe em linha reta e chega ao máximo em
-# ventoinhas_maximo_em_c (ou na hora, se o freio acionar). Sobe na hora e
-# desce devagar. "maximo": o piso fica sempre no máximo (mais barulho, picos
+# ventoinhas_maximo_em_c. Desce devagar. "maximo": o piso fica sempre no máximo (mais barulho, picos
 # um pouco menores). "automatico": o applesmc decide sozinho.
 ventoinhas = "curva"
 ventoinhas_calma_ate_c = 60
 ventoinhas_maximo_em_c = 80
 ventoinhas_minimo_rpm = 2000
 ventoinhas_descida_rpm_por_s = 50
+ventoinhas_suavizacao_s = 20
 
 # Onde o Prometheus lê. Só no loopback: o serviço roda como root.
 escuta = "127.0.0.1:9101"
