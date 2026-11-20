@@ -40,6 +40,7 @@ pub const SO_NA_SUBIDA: &[&str] = &[
     "psi_janela_ms",
     "tcc_offset_c",
     "grafana",
+    "painel",
 ];
 
 /// O que a linha de comando pediu.
@@ -294,7 +295,8 @@ pub fn manter_os_da_subida(inicial: &Config, novo: &mut Config) -> Vec<&'static 
         psi_parado_ms,
         psi_janela_ms,
         tcc_offset_c,
-        grafana
+        grafana,
+        painel
     );
     ignorados
 }

@@ -55,6 +55,10 @@ pub struct Decisao {
     pub intensidade: f64,
     /// O alvo de temperatura (e não a curva) é quem limita o PL1 agora.
     pub pelo_alvo: bool,
+    /// O PL1 que a curva pediu nesta leitura.
+    pub pela_curva_w: f64,
+    /// O PL1 que o alvo pediu, quando há alvo.
+    pub do_alvo_w: Option<f64>,
     pub mudanca: Option<Mudanca>,
 }
 
@@ -169,6 +173,8 @@ impl Freio {
             pl1_w,
             intensidade,
             pelo_alvo,
+            pela_curva_w: pela_curva,
+            do_alvo_w: do_alvo,
             mudanca,
         }
     }

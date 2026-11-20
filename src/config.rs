@@ -111,6 +111,15 @@ impl Default for ConfigMaos {
     }
 }
 
+/// O painel em `/` e a API dele.
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ConfigPainel {
+    /// Logins da tailnet que podem mudar ajustes pelo painel (o cabeçalho
+    /// `Tailscale-User-Login` que o `tailscale serve` põe). Vazio: só mostra.
+    pub quem_pode_ajustar: Vec<String>,
+}
+
 /// Os avisos ao Grafana: uma anotação por intervenção.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -188,6 +197,7 @@ pub struct Config {
     pub processos: ConfigProcessos,
     pub maos: ConfigMaos,
     pub grafana: ConfigGrafana,
+    pub painel: ConfigPainel,
 }
 
 impl Default for Config {
@@ -217,6 +227,7 @@ impl Default for Config {
             processos: ConfigProcessos::default(),
             maos: ConfigMaos::default(),
             grafana: ConfigGrafana::default(),
+            painel: ConfigPainel::default(),
         }
     }
 }

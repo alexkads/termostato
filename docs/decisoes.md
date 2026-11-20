@@ -130,3 +130,14 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 
 **Decisão.** O alvo de temperatura desce o PL1 em proporção ao erro e acumula, entre 8 W e o normal; vale o menor entre ele e a curva.
 **Por quê.** O PL1 que segura uma temperatura muda com a carga. O controle integral acha esse valor sem tabela, e a curva continua sendo a rede de segurança acima dele.
+
+## 25. O painel em RavenRS, embutido no binário
+
+**Contexto.** O dono pediu uma interface própria, "linda", desenhada com o design system do RCB (RavenComponentBook, o do RavenRS) e feita com os componentes do RavenRS em WebGL2.
+**Decisão.** Uma crate à parte (`painel/`, workspace próprio, RavenRS fixado num commit) compilada para wasm por `painel/compilar.sh`; o resultado (`painel/dist/`) fica no repositório e o termostato o embute com `include_bytes!`. O app não fala HTTP: a página busca `/api/estado` a cada segundo e entrega o JSON ao wasm, e os ajustes voltam por `window.termostatoAjustar`.
+**Por quê.** O RPM continua compilando em segundos, sem toolchain de wasm na fedora, e o painel nunca fica de versão diferente do serviço. O custo são 6 MB de wasm no git a cada mudança do painel.
+
+## 26. Ajustar pelo painel só pela tailnet
+
+**Decisão.** O `POST /api/ajustes` exige o cabeçalho `Tailscale-User-Login` de um login listado em `[painel] quem_pode_ajustar` (que só muda no toml, reiniciando), corpo JSON e `Origin` do próprio host.
+**Por quê.** O `tailscale serve` identifica quem pede sem senha nova. O JSON obriga o navegador a um preflight de CORS que o servidor não responde, e o `Origin` barra outra página aberta no navegador do dono. Um processo local poderia forjar o cabeçalho no loopback, mas na fedora o único usuário já tem `sudo` sem senha: não há ganho de privilégio.

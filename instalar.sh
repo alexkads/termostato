@@ -76,6 +76,16 @@ if [ -d "$MONITORAMENTO" ]; then
     printf '\n[grafana]\nurl = "http://100.110.180.47:3000"\ntoken_arquivo = "/etc/termostato/grafana.token"\n' | sudo tee -a /etc/termostato.toml >/dev/null
     sudo systemctl restart termostato.service
   fi
+  # O painel: quem pode ajustar é o dono desta máquina na tailnet (o login do
+  # Tailscale fica só na configuração daqui, nunca no repositório).
+  if ! sudo grep -q '^\[painel\]' /etc/termostato.toml; then
+    dono="$(tailscale status --json | python3 -c 'import sys,json; s=json.load(sys.stdin); print(s["User"][str(s["Self"]["UserID"])]["LoginName"])')"
+    printf '\n[painel]\nquem_pode_ajustar = ["%s"]\n' "$dono" | sudo tee -a /etc/termostato.toml >/dev/null
+    sudo systemctl restart termostato.service
+  fi
+  # A tailnet chega ao painel pela porta 9101, e o tailscale serve põe o
+  # cabeçalho Tailscale-User-Login, que a API confere antes de ajustar.
+  sudo tailscale serve --bg --http=9101 http://127.0.0.1:9101 >/dev/null
   if ! grep -q "job_name: termostato" "$MONITORAMENTO/prometheus.yml"; then
     cat >> "$MONITORAMENTO/prometheus.yml" <<'EOF'
   - job_name: termostato

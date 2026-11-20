@@ -2,6 +2,14 @@
 
 Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs/decisoes.md) e a narrativa em [docs/historia.md](docs/historia.md).
 
+## 0.8.0: o painel
+
+- **Painel próprio em `/`**, feito em RavenRS e compilado para o navegador (WebGL2), embutido no binário: números ao vivo com tendência, temperatura com alvo e corte do chip, ajustes com um clique, o fluxo da decisão (FlowCanvas), potência, ventoinhas, quem gasta a CPU, freio por hora, sensores do Mac, processos, o que ele fez e o histórico dos mal-educados. Temas Escuro, Claro e Vidro. Desenho aprovado em [Termostato · painel](https://claude.ai/artifact/WZ8myAZ9MhV63rVUQxrSiR), com o design system do RCB (RavenRS).
+- **API:** `GET /api/estado` (JSON) e `POST /api/ajustes`, que passa pelas mesmas regras do `sudo termostato chave=valor`.
+- **Quem pode ajustar:** só quem chega pelo `tailscale serve` com um login de `[painel] quem_pode_ajustar`; corpo JSON e `Origin` do próprio host, contra outra página.
+- O servidor HTTP atende cada conexão numa thread: o painel baixando o wasm não atrasa o Prometheus.
+- O instalador publica o painel na tailnet (`http://macpro-i7-alex:9101`) e põe o dono da máquina como quem pode ajustar.
+
 ## 0.7.0: ajustes na hora e o alvo de temperatura
 
 - **`sudo termostato chave=valor …`** muda qualquer parâmetro com o serviço rodando, sem reiniciar: vale em até 2 s, sobrevive a um reinício e passa pela mesma validação do toml. `termostato ajustes` mostra o que está em vigor, e `termostato padrao` tira tudo.

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Termostato</title>
+    <style>
+      html, body { height: 100%; margin: 0; overflow: hidden; background: #0b0d12; color: #eef1f7; font-family: system-ui, sans-serif; }
+      @media (prefers-color-scheme: light) { html, body { background: #f4f5f8; color: #12151c; } }
+      /* O canvas é medido pelo CSS; o RavenRS acerta o buffer à densidade da tela. */
+      #painel { display: block; width: 100vw; height: 100vh; }
+      #aviso { position: fixed; left: 16px; bottom: 40px; max-width: 520px; padding: 12px 16px; border-radius: 10px;
+        background: #181c25; border: 1px solid #2a3040; color: #eef1f7; font: 13px/18px system-ui, sans-serif; display: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="painel" aria-label="Painel do termostato"></canvas>
+    <div id="aviso" role="status"></div>
+    <script type="module">
+      import init, { receber, sem_resposta } from "./painel.js";
+
+      const aviso = document.getElementById("aviso");
+      const mostrar = (texto) => {
+        aviso.textContent = texto;
+        aviso.style.display = "block";
+        clearTimeout(mostrar.t);
+        mostrar.t = setTimeout(() => (aviso.style.display = "none"), 6000);
+      };
+
+      async function buscar() {
+        try {
+          const r = await fetch("/api/estado", { cache: "no-store" });
+          if (!r.ok) throw new Error(r.status);
+          receber(await r.text());
+        } catch (_) {
+          sem_resposta();
+        }
+      }
+
+      // Cada ajuste vai ao termostato. A régua manda muitos valores enquanto
+      // é arrastada: espera 400 ms sem mudança antes de mandar o último.
+      const pendentes = new Map();
+      window.termostatoAjustar = (corpo) => {
+        const chave = Object.keys(JSON.parse(corpo).ajustes ?? { padrao: 1 }).join(",");
+        clearTimeout(pendentes.get(chave));
+        pendentes.set(chave, setTimeout(async () => {
+          pendentes.delete(chave);
+          try {
+            const r = await fetch("/api/ajustes", { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo });
+            if (!r.ok) {
+              const e = await r.json().catch(() => ({}));
+              mostrar("Ajuste recusado: " + (e.erro ?? r.status));
+            }
+          } catch (_) {
+            mostrar("Ajuste não enviado: o termostato não respondeu.");
+          }
+          buscar();
+        }, chave === "pl1_normal_w" ? 400 : 0));
+      };
+
+      await init();
+      await buscar();
+      setInterval(buscar, 1000);
+    </script>
+  </body>
+</html>

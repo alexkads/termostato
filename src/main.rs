@@ -30,11 +30,12 @@ mod historico;
 mod kernel;
 mod maos;
 mod metricas;
+mod painel;
 mod pressao;
 mod processos;
 mod tcc;
 
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -65,6 +66,10 @@ use fabrica::{Fabrica, Piso};
 struct Estado {
     retrato: Retrato,
     ultima_leitura: Option<Instant>,
+    /// A config em vigor (com os ajustes) e os ajustes, para a API do painel.
+    cfg: Config,
+    em_vigor: toml::Table,
+    historia: painel::Historia,
 }
 
 fn main() {
@@ -189,13 +194,17 @@ fn rodar(caminho: &Path) -> Result<(), String> {
     let estado = Arc::new(Mutex::new(Estado {
         retrato: Retrato::default(),
         ultima_leitura: None,
+        cfg: cfg.clone(),
+        em_vigor: ajustes_em_vigor.clone(),
+        historia: painel::Historia::default(),
     }));
     let ouvinte = TcpListener::bind(&cfg.escuta)
         .map_err(|e| format!("não escutei em {}: {e}", cfg.escuta))?;
     {
         let estado = Arc::clone(&estado);
         let validade = Duration::from_secs_f64(cfg.intervalo_s * 3.0);
-        std::thread::spawn(move || servir(&ouvinte, &estado, validade));
+        let caminho = caminho.to_path_buf();
+        std::thread::spawn(move || servir(&ouvinte, &estado, validade, &caminho));
     }
 
     let (avisador, sem_grafana) = Avisador::novo(&cfg.grafana);
@@ -306,6 +315,9 @@ fn rodar(caminho: &Path) -> Result<(), String> {
         if let Ok(mut e) = estado.lock() {
             e.retrato = retrato.clone();
             e.ultima_leitura = Some(Instant::now());
+            e.cfg = cfg.clone();
+            e.em_vigor = ajustes_em_vigor.clone();
+            e.historia.registrar(agora_unix(), dt, &retrato);
         }
         esperar(
             Duration::from_secs_f64(cfg.intervalo_s),
@@ -451,6 +463,13 @@ fn registrar_o_freio(
     retrato.temperatura_prevista_c = Some(d.prevista_c);
     retrato.tendencia_c_s = Some(d.tendencia_c_s);
     retrato.freio_intensidade = d.intensidade;
+    retrato.decisao = metricas::DecisaoLida {
+        pela_curva_w: d.pela_curva_w,
+        do_alvo_w: d.do_alvo_w,
+        prevista_processos_c: d.prevista_processos_c,
+        antecipado: d.antecipado,
+        pelo_alvo: d.pelo_alvo,
+    };
     let texto = match d.mudanca {
         Some(Mudanca::Acionou) if d.pelo_alvo => {
             retrato.acionamentos += 1;
@@ -613,9 +632,21 @@ fn devolver(cfg: &Config, f: &Fabrica) -> Result<(), String> {
     Ok(())
 }
 
-fn servir(ouvinte: &TcpListener, estado: &Mutex<Estado>, validade: Duration) {
+fn agora_unix() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64())
+}
+
+/// Uma thread por conexão: o painel baixando o wasm não atrasa o Prometheus.
+fn servir(ouvinte: &TcpListener, estado: &Arc<Mutex<Estado>>, validade: Duration, caminho: &Path) {
+    let fuso = painel::fuso_local_s();
     for conexao in ouvinte.incoming().flatten() {
-        let _ = responder(conexao, estado, validade);
+        let estado = Arc::clone(estado);
+        let caminho = caminho.to_path_buf();
+        std::thread::spawn(move || {
+            let _ = responder(conexao, &estado, validade, &caminho, fuso);
+        });
     }
 }
 
@@ -623,53 +654,77 @@ fn responder(
     mut conexao: TcpStream,
     estado: &Mutex<Estado>,
     validade: Duration,
+    caminho_config: &Path,
+    fuso: i64,
 ) -> std::io::Result<()> {
-    conexao.set_read_timeout(Some(Duration::from_secs(2)))?;
-    // Lê até o fim do cabeçalho: responder no primeiro pedaço e fechar com o
-    // resto por ler faz o kernel mandar RST, e o cliente vê "connection reset".
-    let mut pedido = Vec::with_capacity(512);
-    let mut pedaco = [0u8; 512];
-    while !pedido.windows(4).any(|j| j == b"\r\n\r\n") && pedido.len() < 8192 {
-        let n = conexao.read(&mut pedaco)?;
-        if n == 0 {
-            break;
-        }
-        pedido.extend_from_slice(&pedaco[..n]);
-    }
-    let linha = String::from_utf8_lossy(&pedido);
-    let caminho = linha.split_whitespace().nth(1).unwrap_or("/");
-    let (retrato, fresca) = {
+    conexao.set_read_timeout(Some(Duration::from_secs(5)))?;
+    // Lê o pedido inteiro: responder no primeiro pedaço e fechar com o resto
+    // por ler faz o kernel mandar RST, e o cliente vê "connection reset".
+    let pedido = painel::ler_pedido(&mut conexao)?;
+    let (status, tipo, corpo): painel::Resposta = {
         let e = estado
             .lock()
             .map_err(|_| std::io::Error::other("estado envenenado"))?;
-        (
-            e.retrato.clone(),
-            e.ultima_leitura.is_some_and(|t| t.elapsed() <= validade),
-        )
-    };
-    let (status, tipo, corpo) = match caminho.split('?').next().unwrap_or("/") {
-        "/metrics" => (
-            "200 OK",
-            "text/plain; version=0.0.4; charset=utf-8",
-            retrato.em_texto(),
-        ),
-        "/saude" if fresca => ("200 OK", "text/plain; charset=utf-8", "ok\n".into()),
-        "/saude" => (
-            "503 Service Unavailable",
-            "text/plain; charset=utf-8",
-            "sem leitura recente\n".into(),
-        ),
-        _ => (
-            "404 Not Found",
-            "text/plain; charset=utf-8",
-            "use /metrics ou /saude\n".into(),
-        ),
+        let fresca = e.ultima_leitura.is_some_and(|t| t.elapsed() <= validade);
+        match (pedido.metodo.as_str(), pedido.caminho.as_str()) {
+            ("GET", "/metrics") => (
+                "200 OK",
+                "text/plain; version=0.0.4; charset=utf-8",
+                e.retrato.em_texto().into_bytes(),
+            ),
+            ("GET", "/saude") if fresca => {
+                ("200 OK", "text/plain; charset=utf-8", b"ok\n".to_vec())
+            }
+            ("GET", "/saude") => (
+                "503 Service Unavailable",
+                "text/plain; charset=utf-8",
+                b"sem leitura recente\n".to_vec(),
+            ),
+            ("GET", "/api/estado") => (
+                "200 OK",
+                "application/json",
+                painel::estado_json(
+                    &e.retrato,
+                    &e.historia,
+                    &e.cfg,
+                    &e.em_vigor,
+                    agora_unix(),
+                    fuso,
+                    painel::autorizar(&pedido, &e.cfg).is_ok(),
+                )
+                .into_bytes(),
+            ),
+            ("POST", "/api/ajustes") => {
+                let cfg = e.cfg.clone();
+                drop(e);
+                painel::ajustar(&pedido, &cfg, caminho_config)
+            }
+            ("GET", c) => painel::ARQUIVOS
+                .iter()
+                .find(|(p, _, _)| *p == c || (c == "/index.html" && *p == "/"))
+                .map_or_else(
+                    || {
+                        (
+                            "404 Not Found",
+                            "text/plain; charset=utf-8",
+                            b"use /, /api/estado, /metrics ou /saude\n".to_vec(),
+                        )
+                    },
+                    |(_, t, b)| ("200 OK", *t, b.to_vec()),
+                ),
+            _ => (
+                "405 Method Not Allowed",
+                "text/plain; charset=utf-8",
+                b"metodo nao aceito\n".to_vec(),
+            ),
+        }
     };
     write!(
         conexao,
-        "HTTP/1.1 {status}\r\nContent-Type: {tipo}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{corpo}",
+        "HTTP/1.1 {status}\r\nContent-Type: {tipo}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n",
         corpo.len()
-    )
+    )?;
+    conexao.write_all(&corpo)
 }
 
 #[cfg(test)]
@@ -764,10 +819,21 @@ mod testes {
                 ..Retrato::default()
             },
             ultima_leitura: Some(Instant::now()),
+            cfg: Config::default(),
+            em_vigor: toml::Table::new(),
+            historia: painel::Historia::default(),
         }));
         let e2 = Arc::clone(&estado);
-        std::thread::spawn(move || servir(&ouvinte, &e2, Duration::from_secs(6)));
+        std::thread::spawn(move || {
+            servir(
+                &ouvinte,
+                &e2,
+                Duration::from_secs(6),
+                Path::new("/nao/existe.toml"),
+            );
+        });
         let pedir = |caminho: &str| {
+            use std::io::Read;
             let mut c = TcpStream::connect(endereco).unwrap();
             write!(c, "GET {caminho} HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
             let mut s = String::new();
@@ -781,5 +847,13 @@ mod testes {
         estado.lock().unwrap().ultima_leitura = None;
         assert!(pedir("/saude").starts_with("HTTP/1.1 503"));
         assert!(pedir("/outra").starts_with("HTTP/1.1 404"));
+        let api = pedir("/api/estado");
+        assert!(api.starts_with("HTTP/1.1 200"), "{api}");
+        assert!(api.contains("\"temperatura\":81.0"));
+        assert!(
+            api.contains("\"pode_ajustar\":false"),
+            "sem login da tailnet, só mostra"
+        );
+        assert!(pedir("/").contains("text/html"));
     }
 }

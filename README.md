@@ -6,6 +6,8 @@ Um serviço em Rust que cuida de todo o calor da **fedora** (`macpro-i7-alex`), 
 
 Desde a 0.5, ele tem **superpoderes**: vê os processos e aprende quem costuma esquentar a máquina, freando **antes** quando eles aparecem; sente a pressão de memória (com o próprio kernel o acordando); segura no cgroup quem abusa (por padrão, só observando); grava no chip uma proteção que faz a **própria CPU se frear a 92 °C**; e avisa o Grafana de tudo o que faz. Ver [os superpoderes](docs/superpoderes.md).
 
+Desde a 0.8, tem **painel próprio** em `/`, feito em RavenRS e desenhado pela GPU do navegador (WebGL2): números ao vivo, o fluxo de cada decisão, gráficos, o histórico dos mal-educados e os ajustes com um clique. Na fedora: http://macpro-i7-alex:9101. Ver [o painel](docs/painel.md).
+
 Desde a 0.7, **recebe parâmetros na hora**, sem reiniciar: `sudo termostato CPU50C` segura a CPU em 50 °C, e `sudo termostato chave=valor` muda qualquer ajuste (`pl1_normal_w=30`, `maos.modo=agir`…). Ver [ajustar na hora](docs/operacao.md#ajustar-na-hora-termostato-chavevalor).
 
 > ⚠️ **Testado num processador só.** O termostato foi feito e testado em **uma máquina**: um MacBookPro11,2 (Retina 15", 2014) com **Intel Core i7-4770HQ (Haswell)** com **Fedora 44 e 45**. Várias partes dependem desse hardware: as ventoinhas pelo `applesmc` (só Macs), o limite de potência pelo RAPL (Intel), o **TCC offset gravado direto no `MSR 0x1A2`** (o chip precisa dizer que é programável, e a gravação marca o kernel como "tainted") e os valores de fábrica que o instalador semeia (PL1 de 100 W, do firmware da Apple). Em outro processador ou outro Mac, revise o [`termostato.toml`](termostato.toml) antes, comece com `tcc_offset_c = 0` e as mãos em `"observar"`, e acompanhe o journal. Use por sua conta e risco.
@@ -80,6 +82,7 @@ A tabela completa, as receitas ("quero menos calor", "quero frear mais cedo") e 
 | Documento | Para quê |
 |---|---|
 | [Os superpoderes](docs/superpoderes.md) | Processos, histórico negativo, freio antecipado, memória, mãos, avisos ao Grafana, o kernel e o chip |
+| [O painel](docs/painel.md) | A interface em `/`, a API e como mudar o painel |
 | [Como funciona](docs/como-funciona.md) | O laço, a previsão, a curva, o caminho até o registro da CPU, a parada segura, os testes |
 | [Operação](docs/operacao.md) | Instalar, atualizar, ajustar, acompanhar, métricas, alertas, problemas conhecidos |
 | [A máquina](docs/maquina.md) | O hardware, os sensores, as medições e o teste com a build do VintageLightbox |

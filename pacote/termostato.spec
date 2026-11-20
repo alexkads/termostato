@@ -82,6 +82,9 @@ fi
 %doc %{_docdir}/%{name}/CHANGELOG.md
 
 %changelog
+* Thu Nov 19 2026 Alex <alexkads@users.noreply.github.com> - 0.8.0-1
+- Painel próprio em RavenRS (WebGL2) servido em /, com a API /api/estado e /api/ajustes
+
 * Thu Nov 19 2026 Alex <alexkads@users.noreply.github.com> - 0.7.0-1
 - termostato chave=valor muda parâmetros com o serviço rodando; CPU50C segura a CPU num alvo de temperatura
 
