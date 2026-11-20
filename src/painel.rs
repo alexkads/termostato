@@ -22,7 +22,7 @@ use crate::avisos;
 use crate::config::Config;
 use crate::metricas::Retrato;
 
-/// A página e o app, compilados por `painel/compilar.sh`.
+/// A página, o app e o ícone da aba, postos em `dist/` por `painel/compilar.sh`.
 pub const ARQUIVOS: &[(&str, &str, &[u8])] = &[
     (
         "/",
@@ -38,6 +38,11 @@ pub const ARQUIVOS: &[(&str, &str, &[u8])] = &[
         "/painel_bg.wasm",
         "application/wasm",
         include_bytes!("../painel/dist/painel_bg.wasm"),
+    ),
+    (
+        "/favicon.svg",
+        "image/svg+xml",
+        include_bytes!("../painel/dist/favicon.svg"),
     ),
 ];
 

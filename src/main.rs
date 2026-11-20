@@ -938,5 +938,9 @@ mod testes {
             "sem login da tailnet, só mostra"
         );
         assert!(pedir("/").contains("text/html"));
+        let icone = pedir("/favicon.svg");
+        assert!(icone.starts_with("HTTP/1.1 200"), "{icone}");
+        assert!(icone.contains("Content-Type: image/svg+xml"));
+        assert!(pedir("/favicon.ico").starts_with("HTTP/1.1 404"));
     }
 }

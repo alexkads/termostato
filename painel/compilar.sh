@@ -17,7 +17,7 @@ if command -v wasm-opt >/dev/null 2>&1; then
     --enable-nontrapping-float-to-int --enable-reference-types --enable-sign-ext \
     -o dist/painel_bg.wasm dist/painel_bg.wasm
 fi
-cp web/index.html dist/index.html
+cp web/index.html web/favicon.svg dist/
 tamanho=$(wc -c < dist/painel_bg.wasm | tr -d ' ')
 gz=$(gzip -9 -c dist/painel_bg.wasm | wc -c | tr -d ' ')
 echo "painel em dist/ (${tamanho} bytes; ${gz} gzip)"
