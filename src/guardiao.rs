@@ -297,6 +297,19 @@ impl Guardiao {
             .filter(|(n, _)| self.historico.eh_suspeito(n, cfg))
             .map(|(n, f)| (n.clone(), f.nota_c_s))
             .collect();
+        retrato.fichas = self
+            .historico
+            .fichas
+            .iter()
+            .map(|(n, f)| crate::metricas::FichaLida {
+                nome: n.clone(),
+                nota_c_s: f.nota_c_s,
+                maior_tendencia_c_s: f.maior_tendencia_c_s,
+                observacoes: f.observacoes,
+                visto_em: f.visto_em,
+                suspeito: self.historico.eh_suspeito(n, cfg),
+            })
+            .collect();
         retrato.segurados = self.segurados.cgroups.len();
         retrato.freio_antecipado = !self.suspeitos.is_empty();
     }

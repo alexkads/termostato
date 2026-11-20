@@ -17,6 +17,27 @@ pub struct ProcessoLido {
     pub rss_mb: f64,
 }
 
+/// Uma ficha do histórico negativo, para o painel.
+#[derive(Debug, Clone, Default)]
+pub struct FichaLida {
+    pub nome: String,
+    pub nota_c_s: f64,
+    pub maior_tendencia_c_s: f64,
+    pub observacoes: u32,
+    pub visto_em: u64,
+    pub suspeito: bool,
+}
+
+/// O que cada regra pediu na última leitura, para o fluxo da decisão do painel.
+#[derive(Debug, Clone, Default)]
+pub struct DecisaoLida {
+    pub pela_curva_w: f64,
+    pub do_alvo_w: Option<f64>,
+    pub prevista_processos_c: Option<f64>,
+    pub antecipado: bool,
+    pub pelo_alvo: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct VentoinhaLida {
     pub numero: String,
@@ -69,6 +90,9 @@ pub struct Retrato {
     pub dominios_w: Vec<(String, f64)>,
     /// Os sensores do applesmc.
     pub sensores_do_mac: Vec<(String, f64)>,
+    /// O histórico negativo inteiro, com o que o painel mostra.
+    pub fichas: Vec<FichaLida>,
+    pub decisao: DecisaoLida,
 }
 
 /// Escapa um valor de rótulo do Prometheus.

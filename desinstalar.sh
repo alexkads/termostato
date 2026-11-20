@@ -47,4 +47,6 @@ open(p, "w").write("\n".join(saida))
 PY
   (cd "$MONITORAMENTO" && docker compose restart prometheus grafana >/dev/null 2>&1)
 fi
+# O painel na tailnet.
+sudo tailscale serve --http=9101 off >/dev/null 2>&1 || true
 echo "✅ termostato desinstalado; PL1 agora: $(( $(cat /sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw) / 1000000 )) W"

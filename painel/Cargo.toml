@@ -1,0 +1,34 @@
+# O painel do termostato: um app RavenRS para o navegador (WebGL2), embutido no
+# binário do termostato. Workspace próprio: o RPM do termostato não compila isto,
+# usa o que `compilar.sh` deixou em `dist/`.
+[package]
+name = "painel"
+version = "0.8.0"
+edition = "2024"
+publish = false
+license = "MIT"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Fixado num commit do RavenRS: o design system do RCB (RavenRS) é deste commit.
+ravenrs = { git = "https://github.com/alexkads/RavenRS", rev = "eff963ac27c119a7951e52c755d678dde1728ff1", default-features = false, features = ["charts", "flow"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# O mesmo do RavenRS: o `wasm-bindgen` da linha de comando tem de bater.
+wasm-bindgen = "=0.2.130"
+wasm-bindgen-futures = "0.4.80"
+console_error_panic_hook = "0.1"
+web-sys = { version = "0.3", features = ["console"] }
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

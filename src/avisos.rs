@@ -11,8 +11,10 @@
 //! freio, só gera um ⚠️ no journal. Sem token, os avisos ficam só no journal e
 //! nas métricas (`termostato_acoes_total`).
 
+use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -83,10 +85,30 @@ impl Avisador {
     }
 
     pub fn avisar(&self, aviso: Aviso) {
+        guardar_no_diario(&aviso);
         if let Some(f) = &self.fila {
             let _ = f.send(aviso);
         }
     }
+}
+
+/// Os últimos avisos, para o painel ("O que ele fez"), com ou sem Grafana.
+static DIARIO: Mutex<VecDeque<Aviso>> = Mutex::new(VecDeque::new());
+const DIARIO_TAMANHO: usize = 40;
+
+fn guardar_no_diario(aviso: &Aviso) {
+    if let Ok(mut d) = DIARIO.lock() {
+        d.push_front(aviso.clone());
+        d.truncate(DIARIO_TAMANHO);
+    }
+}
+
+/// Os avisos mais novos primeiro.
+pub fn diario(quantos: usize) -> Vec<Aviso> {
+    DIARIO.lock().map_or_else(
+        |_| Vec::new(),
+        |d| d.iter().take(quantos).cloned().collect(),
+    )
 }
 
 /// Esperas entre as tentativas de um aviso. O termostato sobe cedo no boot,
