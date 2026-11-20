@@ -55,7 +55,7 @@ O código está em `painel/` (uma crate RavenRS à parte). Depois de mudar:
 painel/compilar.sh
 ```
 
-Ele compila para `wasm32-unknown-unknown`, passa pelo `wasm-bindgen` 0.2.130 (igual ao do RavenRS) e pelo `wasm-opt`, e deixa `index.html`, `painel.js` e `painel_bg.wasm` em `painel/dist/`, que o termostato embute. Commit o `dist/` junto: o RPM não compila wasm.
+Ele compila para `wasm32-unknown-unknown`, passa pelo `wasm-bindgen` 0.2.130 (igual ao do RavenRS) e pelo `wasm-opt`, e deixa `index.html`, `favicon.svg`, `painel.js` e `painel_bg.wasm` em `painel/dist/`, que o termostato embute. Commit o `dist/` junto: o RPM não compila wasm.
 
 Para ver sem a fedora, sirva `painel/dist/` com o `exemplo.json` em `api/estado`:
 
