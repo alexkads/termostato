@@ -30,9 +30,16 @@ alvo_ganho_w_por_c_s = 0.5
 # Segundos entre leituras.
 intervalo_s = 2
 
-# "maximo": o piso de cada ventoinha vai ao máximo dela (o MacBook sopra antes
-# de esquentar). "automatico": o applesmc decide sozinho.
-ventoinhas = "maximo"
+# "curva": o piso acompanha a temperatura. Fica no mínimo até
+# ventoinhas_calma_ate_c, sobe em linha reta e chega ao máximo em
+# ventoinhas_maximo_em_c (ou na hora, se o freio acionar). Sobe na hora e
+# desce devagar. "maximo": o piso fica sempre no máximo (mais barulho, picos
+# um pouco menores). "automatico": o applesmc decide sozinho.
+ventoinhas = "curva"
+ventoinhas_calma_ate_c = 60
+ventoinhas_maximo_em_c = 80
+ventoinhas_minimo_rpm = 2000
+ventoinhas_descida_rpm_por_s = 50
 
 # Onde o Prometheus lê. Só no loopback: o serviço roda como root.
 escuta = "127.0.0.1:9101"

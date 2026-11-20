@@ -79,6 +79,14 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 **Decisão.** O piso de cada ventoinha vai ao máximo dela (`ventoinhas = "maximo"`).
 **Por quê.** A saída de ar do MacBook é pela dobradiça e o chassi esquenta rápido; soprar antes de esquentar reduz os picos. O custo é o barulho e a poeira, que volta mais rápido. `"automatico"` devolve a decisão ao SMC.
 
+**Revista em 20/11/2026 (decisão 14b).**
+
+## 14b. Ventoinhas pela curva
+
+**Contexto.** Com o piso sempre no máximo, a fedora ficava com as ventoinhas a ~6000 RPM mesmo parada, a 45–55 °C.
+**Decisão.** O padrão passa a ser `ventoinhas = "curva"`: mínimo até 60 °C, máximo a partir de 80 °C (onde o freio começa), em linha reta entre os dois; máximo também com o freio acionado ou sem leitura de temperatura. Sobe na hora e desce a 50 RPM/s, gravando em degraus de 100 RPM.
+**Por quê.** O dono: *"Eu gostaria que o cooler não ficasse acelerado sem necessidade"*. O motivo da decisão 14 (soprar antes de esquentar) continua de pé onde importa: a curva chega ao máximo **antes** do freio, e subir é imediato. Abaixo de 60 °C não há pico a evitar, só barulho e poeira. Descer devagar é o mesmo truque do freio contra a sanfona.
+
 ## 15. HTTP e Prometheus à mão
 
 **Decisão.** `std::net::TcpListener` e o formato de texto do Prometheus escritos à mão, sem framework.

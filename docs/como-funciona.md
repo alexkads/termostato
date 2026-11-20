@@ -13,6 +13,7 @@ Este documento acompanha o caminho inteiro: do arquivo de configuração até o 
 | [`src/main.rs`](../src/main.rs) | O laço a cada `intervalo_s`, o servidor HTTP do `/metrics`, os sinais e o `--desinstalar` |
 | [`src/config.rs`](../src/config.rs) | Lê e valida o `/etc/termostato.toml`; arquivo ausente = padrões |
 | [`src/freio.rs`](../src/freio.rs) | A regra do freio de calor, pura (sem hardware), com histerese |
+| [`src/sopro.rs`](../src/sopro.rs) | A curva das ventoinhas, pura (sem hardware): sobe na hora, desce devagar |
 | [`src/hardware.rs`](../src/hardware.rs) | Sensor, RAPL, ventoinhas e frequência, pelo sysfs |
 | [`src/fabrica.rs`](../src/fabrica.rs) | Os valores de fábrica, gravados uma vez, para o `--desinstalar` |
 | [`src/metricas.rs`](../src/metricas.rs) | O retrato de cada leitura e o texto do Prometheus |
@@ -29,7 +30,7 @@ flowchart LR
   B --> C[curva de freio<br/>sobre a maior: agora ou prevista]
   C --> D[freia na hora<br/>solta a 0,5 W/s]
   D --> E[PL1 no hardware ≠ alvo?<br/>grava; 🔧 se mudaram por fora]
-  E --> F[piso das ventoinhas ≠ máximo?<br/>grava e registra 🌀]
+  E --> F[piso das ventoinhas ≠ o da curva?<br/>grava e registra 🌀]
   F --> G[mede potência e frequência<br/>atualiza /metrics]
 ```
 

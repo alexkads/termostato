@@ -99,7 +99,11 @@ ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'
 | `pl1_minimo_w` | 8 | O PL1 mais baixo a que o alvo pode levar |
 | `alvo_ganho_w_por_c_s` | 0,5 | Quanto o PL1 desce por segundo para cada °C acima do alvo |
 | `intervalo_s` | 2 | Segundos entre leituras |
-| `ventoinhas` | `"maximo"` | `"maximo"` ou `"automatico"` (o `applesmc` decide) |
+| `ventoinhas` | `"curva"` | `"curva"` (o piso segue a temperatura), `"maximo"` ou `"automatico"` (o `applesmc` decide) |
+| `ventoinhas_calma_ate_c` | 60 | Curva: até aqui, o piso fica no mínimo |
+| `ventoinhas_maximo_em_c` | 80 | Curva: daqui em diante (ou com o freio), o piso vai ao máximo |
+| `ventoinhas_minimo_rpm` | 2000 | Curva: o piso mínimo |
+| `ventoinhas_descida_rpm_por_s` | 50 | Curva: quão rápido o piso desce ao esfriar (subir é na hora) |
 | `escuta` | `127.0.0.1:9101` | Onde o Prometheus lê |
 
 ### Os superpoderes
@@ -132,7 +136,8 @@ A configuração é validada ao subir. Um campo com erro de digitação, freio a
 | Frear mais cedo | `freio_comeca_c = 75` ou `previsao_s = 15` |
 | Previsão menos nervosa | `janela_leituras = 8` (reta por 16 s) |
 | Voltar ao normal mais rápido | `subida_w_por_s = 1` |
-| Ventoinhas silenciosas | `ventoinhas = "automatico"` (o pico de temperatura sobe) |
+| Ventoinhas mais silenciosas | `ventoinhas_calma_ate_c=65` (começam a subir mais tarde) ou `ventoinhas = "automatico"` (o pico de temperatura sobe) |
+| Ventoinhas sempre no máximo | `ventoinhas = "maximo"` |
 
 ## Acompanhar
 
@@ -150,7 +155,7 @@ A configuração é validada ao subir. Um campo com erro de digitação, freio a
 | 🔥 `… °C agora, … °C previstos …: freio de calor acionado, PL1 em … W` | A curva começou a frear |
 | ❄️ `…: freio de calor desligado, de volta ao limite normal` | Voltou ao normal |
 | 🔧 `PL1 estava em … W: reaplicado …` | Outro programa mudou o PL1 por fora |
-| 🌀 `ventoinha N: piso … → … RPM` | O piso da ventoinha foi corrigido |
+| 🌀 `ventoinha N: piso … → … RPM` | O piso da ventoinha foi corrigido (no modo curva, só ao chegar ao mínimo ou ao máximo) |
 | 👋 `termostato parado com o PL1 em 38 W …` | Parou, deixando o limite normal |
 | ↩️ `PL1 devolvido a 100 W` | Só no `--desinstalar` |
 | 🧠 `rustc (8 cópias, 90 % da CPU) tem histórico de +4.2 °C/s: freio antecipado…` | O freio veio antes, pelo histórico do processo |

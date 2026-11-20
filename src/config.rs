@@ -15,6 +15,9 @@ pub enum Ventoinhas {
     /// O piso de cada ventoinha vai ao máximo dela: o MacBook não espera
     /// esquentar para soprar (a saída de ar é pela dobradiça).
     Maximo,
+    /// O piso acompanha a temperatura: mínimo com a CPU fria, máximo a partir
+    /// de `ventoinhas_maximo_em_c` ou com o freio acionado (ver `sopro.rs`).
+    Curva,
     /// O termostato não mexe nelas: o `applesmc` decide.
     Automatico,
 }
@@ -171,6 +174,14 @@ pub struct Config {
     /// Intervalo entre leituras, em segundos.
     pub intervalo_s: f64,
     pub ventoinhas: Ventoinhas,
+    /// Modo curva: até esta temperatura, o piso fica no mínimo.
+    pub ventoinhas_calma_ate_c: f64,
+    /// Modo curva: a partir desta temperatura, o piso vai ao máximo.
+    pub ventoinhas_maximo_em_c: f64,
+    /// Modo curva: o piso mínimo (o de fábrica do MacBookPro11,2 é 2000 RPM).
+    pub ventoinhas_minimo_rpm: u64,
+    /// Modo curva: quão rápido o piso desce quando a CPU esfria. Subir é na hora.
+    pub ventoinhas_descida_rpm_por_s: f64,
     /// Onde o `/metrics` escuta. Só no loopback: o serviço roda como root.
     pub escuta: String,
     /// A raiz do sysfs. Só os testes mudam isto.
@@ -214,7 +225,11 @@ impl Default for Config {
             pl1_minimo_w: 8.0,
             alvo_ganho_w_por_c_s: 0.5,
             intervalo_s: 2.0,
-            ventoinhas: Ventoinhas::Maximo,
+            ventoinhas: Ventoinhas::Curva,
+            ventoinhas_calma_ate_c: 60.0,
+            ventoinhas_maximo_em_c: 80.0,
+            ventoinhas_minimo_rpm: 2000,
+            ventoinhas_descida_rpm_por_s: 50.0,
             escuta: "127.0.0.1:9101".into(),
             sysfs: "/sys".into(),
             estado: "/var/lib/termostato".into(),
@@ -273,6 +288,35 @@ impl Config {
         Ok(())
     }
 
+    /// A curva das ventoinhas.
+    fn validar_ventoinhas(&self) -> Result<(), String> {
+        if self.ventoinhas_calma_ate_c >= self.ventoinhas_maximo_em_c {
+            return Err(format!(
+                "ventoinhas_calma_ate_c ({}) precisa ser menor que ventoinhas_maximo_em_c ({})",
+                self.ventoinhas_calma_ate_c, self.ventoinhas_maximo_em_c
+            ));
+        }
+        if self.ventoinhas_maximo_em_c > self.freio_acima_c {
+            return Err(format!(
+                "ventoinhas_maximo_em_c = {} passa do freio_acima_c ({}): a ventoinha chegaria ao máximo depois do freio",
+                self.ventoinhas_maximo_em_c, self.freio_acima_c
+            ));
+        }
+        if self.ventoinhas_minimo_rpm > 10_000 {
+            return Err(format!(
+                "ventoinhas_minimo_rpm = {} acima de 10000 RPM",
+                self.ventoinhas_minimo_rpm
+            ));
+        }
+        if !(1.0..=10_000.0).contains(&self.ventoinhas_descida_rpm_por_s) {
+            return Err(format!(
+                "ventoinhas_descida_rpm_por_s = {} fora de 1 a 10000",
+                self.ventoinhas_descida_rpm_por_s
+            ));
+        }
+        Ok(())
+    }
+
     /// Recusa o que deixaria a máquina sem proteção ou o freio sem sentido.
     pub fn validar(&self) -> Result<(), String> {
         if !(5.0..=150.0).contains(&self.pl1_normal_w) {
@@ -318,6 +362,7 @@ impl Config {
             ));
         }
         self.validar_alvo()?;
+        self.validar_ventoinhas()?;
         if !(0.5..=60.0).contains(&self.intervalo_s) {
             return Err(format!(
                 "intervalo_s = {} fora de 0,5 a 60 s",
