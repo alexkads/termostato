@@ -9,7 +9,7 @@ Tudo o que se faz no dia a dia com o termostato, sem mexer no sistema operaciona
 Cada versão tem um [Release](https://github.com/alexkads/termostato/releases) com o RPM anexado, e o `dnf` instala direto pela URL:
 
 ```bash
-ssh fedora 'sudo dnf install -y https://github.com/alexkads/termostato/releases/download/v0.6.2/termostato-0.6.2-1.fc45.x86_64.rpm'
+ssh fedora 'sudo dnf install -y https://github.com/alexkads/termostato/releases/download/v0.8.0/termostato-0.8.0-1.fc45.x86_64.rpm'
 ```
 
 ### Pelo código, na fedora
