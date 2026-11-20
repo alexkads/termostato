@@ -2,7 +2,7 @@
 
 Um serviço em Rust que cuida de todo o calor da **fedora** (`macpro-i7-alex`), um MacBookPro11,2 de 2014 com i7-4770HQ rodando Fedora.
 
-**A CPU nunca fica solta.** No dia a dia ela trabalha sob o **limite normal** de potência. Quando a temperatura sobe, ou quando a **previsão** mostra que vai subir, uma **curva de freio** aperta o limite antes do pico. As ventoinhas ficam no máximo, e tudo aparece no Grafana. A arrancada curta (o turbo até 3,4 GHz) continua livre: é ela que faz desse processador um foguetinho.
+**A CPU nunca fica solta.** No dia a dia ela trabalha sob o **limite normal** de potência. Quando a temperatura sobe, ou quando a **previsão** mostra que vai subir, uma **curva de freio** aperta o limite antes do pico. As ventoinhas acompanham a temperatura (quietas com a CPU fria, no máximo antes do freio), e tudo aparece no Grafana. A arrancada curta (o turbo até 3,4 GHz) continua livre: é ela que faz desse processador um foguetinho.
 
 Desde a 0.5, ele tem **superpoderes**: vê os processos e aprende quem costuma esquentar a máquina, freando **antes** quando eles aparecem; sente a pressão de memória (com o próprio kernel o acordando); segura no cgroup quem abusa (por padrão, só observando); grava no chip uma proteção que faz a **própria CPU se frear a 92 °C**; e avisa o Grafana de tudo o que faz. Ver [os superpoderes](docs/superpoderes.md).
 
@@ -73,7 +73,7 @@ O arquivo comentado está em [`termostato.toml`](termostato.toml). Os principais
 | `freio_comeca_c` / `freio_acima_c` | 80 / 92 | Onde a curva começa e onde chega ao máximo |
 | `previsao_s` / `janela_leituras` | 10 / 5 | Quanto à frente a previsão olha, e com quantas leituras |
 | `subida_w_por_s` | 0,5 | Quão rápido o limite volta ao normal |
-| `ventoinhas` | `"maximo"` | `"maximo"` ou `"automatico"` |
+| `ventoinhas` | `"curva"` | `"curva"` (mínimo até 60 °C, máximo a partir de 80 °C), `"maximo"` ou `"automatico"` |
 
 A tabela completa, as receitas ("quero menos calor", "quero frear mais cedo") e as mensagens do journal estão em [operação](docs/operacao.md).
 
@@ -91,6 +91,8 @@ A tabela completa, as receitas ("quero menos calor", "quero frear mais cedo") e 
 | [Histórico de versões](CHANGELOG.md) | O que mudou em cada versão |
 
 ## Desenvolver
+
+Toda mudança começa por uma **issue** e entra por um **PR** para o `main`, nunca direto. O formato de cada um está no [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test

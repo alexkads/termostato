@@ -2,6 +2,12 @@
 
 Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs/decisoes.md) e a narrativa em [docs/historia.md](docs/historia.md).
 
+## Ainda não lançado: ventoinhas pela curva
+
+- **Novo modo `ventoinhas = "curva"`, agora o padrão.** O piso das ventoinhas acompanha a temperatura média dos últimos ~20 s: fica no mínimo (2000 RPM) até 60 °C, sobe em linha reta e chega ao máximo em 80 °C, onde o freio começa. Uma arrancada curta do turbo quase não mexe nele; sem leitura de temperatura, vai ao máximo. Desce devagar (50 RPM/s). O SMC continua livre para soprar acima do piso.
+- Novos parâmetros: `ventoinhas_calma_ate_c`, `ventoinhas_maximo_em_c`, `ventoinhas_minimo_rpm` e `ventoinhas_descida_rpm_por_s` e `ventoinhas_suavizacao_s`, todos ajustáveis na hora (`sudo termostato ventoinhas_calma_ate_c=65`).
+- `"maximo"` continua existindo. Um `/etc/termostato.toml` já instalado com `ventoinhas = "maximo"` não muda sozinho: troque com `sudo termostato ventoinhas=curva`.
+
 ## 0.8.0: o painel
 
 - **Painel próprio em `/`**, feito em RavenRS e compilado para o navegador (WebGL2), embutido no binário: números ao vivo com tendência, temperatura com alvo e corte do chip, ajustes com um clique, o fluxo da decisão (FlowCanvas), potência, ventoinhas, quem gasta a CPU, freio por hora, sensores do Mac, processos, o que ele fez e o histórico dos mal-educados. Temas Escuro, Claro e Vidro. Desenho aprovado em [Termostato · painel](https://claude.ai/artifact/WZ8myAZ9MhV63rVUQxrSiR), com o design system do RCB (RavenRS).

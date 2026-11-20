@@ -33,6 +33,7 @@ mod metricas;
 mod painel;
 mod pressao;
 mod processos;
+mod sopro;
 mod tcc;
 
 use std::io::Write;
@@ -108,6 +109,7 @@ fn anunciar(cfg: &Config, achado: &Fabrica, ventoinhas: usize) {
         .map_or_else(|| "?".into(), |u| uw_para_w(u).to_string());
     let modo = match cfg.ventoinhas {
         Ventoinhas::Maximo => "no máximo",
+        Ventoinhas::Curva => "pela curva",
         Ventoinhas::Automatico => "automático",
     };
     println!(
@@ -233,6 +235,7 @@ fn rodar(caminho: &Path) -> Result<(), String> {
     ));
 
     let mut freio = Freio::default();
+    let mut sopros: Vec<sopro::Sopro> = Vec::new();
     let mut retrato = Retrato::default();
     let mut anterior = Instant::now();
     let inicio = anterior;
@@ -286,7 +289,7 @@ fn rodar(caminho: &Path) -> Result<(), String> {
                 guardiao.avisador(),
             );
         }
-        if cfg.ventoinhas == Ventoinhas::Maximo {
+        if cfg.ventoinhas != Ventoinhas::Automatico {
             if ventoinhas.is_empty() {
                 ventoinhas = hardware::ventoinhas(&sysfs);
                 if !ventoinhas.is_empty() {
@@ -296,8 +299,17 @@ fn rodar(caminho: &Path) -> Result<(), String> {
                     );
                 }
             }
-            for v in &ventoinhas {
-                cuidar_da_ventoinha(v, &mut retrato);
+            if cfg.ventoinhas == Ventoinhas::Maximo {
+                for v in &ventoinhas {
+                    cuidar_da_ventoinha(v, &mut retrato);
+                }
+            } else {
+                sopros.resize_with(ventoinhas.len(), sopro::Sopro::default);
+                // Sem leitura de temperatura, a curva não sabe: sopra tudo.
+                let t = retrato.temperatura_c.unwrap_or(f64::INFINITY);
+                for (v, s) in ventoinhas.iter().zip(sopros.iter_mut()) {
+                    soprar_pela_curva(v, s, t, dt, &cfg, &mut retrato);
+                }
             }
         }
         retrato.ventoinhas = ventoinhas
@@ -563,6 +575,52 @@ fn cuidar_da_ventoinha(v: &Ventoinha, retrato: &mut Retrato) {
     }
 }
 
+/// Modo curva: grava o piso que a curva pede, se mudou de degrau. O journal
+/// só registra quando a ventoinha chega ao mínimo ou ao máximo; o resto do
+/// caminho fica nas métricas (`termostato_ventoinha_rpm{medida="piso"}`).
+fn soprar_pela_curva(
+    v: &Ventoinha,
+    s: &mut sopro::Sopro,
+    t: f64,
+    dt: f64,
+    cfg: &Config,
+    retrato: &mut Retrato,
+) {
+    let (piso, max) = match (v.piso(), v.maximo()) {
+        (Ok(p), Ok(m)) => (p, m),
+        (Err(e), _) | (_, Err(e)) => {
+            retrato.falhas_de_leitura += 1;
+            eprintln!("⚠️ ventoinha {}: {e}", v.numero);
+            return;
+        }
+    };
+    let minimo = cfg.ventoinhas_minimo_rpm.min(max);
+    let novo = s.decidir(t, dt, minimo, max, cfg);
+    let media = s.suavizada().unwrap_or(t);
+    if novo == piso {
+        return;
+    }
+    match v.definir_piso(novo) {
+        Ok(()) if novo == max => {
+            println!(
+                "🌀 ventoinha {}: piso {piso} → {novo} RPM (máximo, média de {media:.0} °C)",
+                v.numero
+            );
+        }
+        Ok(()) if novo == minimo => {
+            println!(
+                "🌀 ventoinha {}: piso {piso} → {novo} RPM (mínimo, média de {media:.0} °C)",
+                v.numero
+            );
+        }
+        Ok(()) => {}
+        Err(e) => {
+            retrato.falhas_de_leitura += 1;
+            eprintln!("⚠️ ventoinha {}: {e}", v.numero);
+        }
+    }
+}
+
 /// Dorme o intervalo em fatias curtas, para o SIGTERM não esperar a volta toda.
 fn esperar(intervalo: Duration, parar: &AtomicBool, alarme: Option<&Alarme>) {
     let fim = Instant::now() + intervalo;
@@ -767,6 +825,31 @@ mod testes {
             38_000_000,
             "nem 25 W nem os 100 W de fábrica"
         );
+    }
+
+    #[test]
+    fn curva_baixa_o_piso_com_a_cpu_fria_e_sobe_com_ela_quente() {
+        let sys = tempfile::tempdir().unwrap();
+        hardware::sysfs_de_teste::montar(sys.path(), 50);
+        let vs = hardware::ventoinhas(sys.path());
+        let cfg = Config::default();
+        let mut retrato = Retrato::default();
+        let mut s = sopro::Sopro::default();
+        // Vinha do modo máximo: fria, cai ao mínimo (primeira decisão, sem memória).
+        vs[0].definir_piso(6156).unwrap();
+        soprar_pela_curva(&vs[0], &mut s, 50.0, 2.0, &cfg, &mut retrato);
+        assert_eq!(vs[0].piso().unwrap(), 2000);
+        // Carga longa: chega ao máximo.
+        for _ in 0..30 {
+            soprar_pela_curva(&vs[0], &mut s, 90.0, 2.0, &cfg, &mut retrato);
+        }
+        assert_eq!(vs[0].piso().unwrap(), 6156);
+        // Sem sensor: máximo.
+        vs[0].definir_piso(2000).unwrap();
+        let mut s = sopro::Sopro::default();
+        soprar_pela_curva(&vs[0], &mut s, f64::INFINITY, 2.0, &cfg, &mut retrato);
+        assert_eq!(vs[0].piso().unwrap(), 6156);
+        assert_eq!(retrato.falhas_de_leitura, 0);
     }
 
     #[test]
