@@ -568,6 +568,7 @@ fn fluxo(estado: State<Option<Estado>>, w: f32) -> impl View {
                 FlowCanvas::new(Binding::constant(grafo(&e)))
                     .view(Binding::constant(vista))
                     .range(zoom, zoom)
+                    .pan_with_wheel(false)
                     .controls(false)
                     .kind("leitura", FlowKind::new(IconName::Zap, "Leitura").tone(Semantic::Warning))
                     .kind("regra", FlowKind::new(IconName::GitBranch, "Regra").tone(Semantic::Success))
