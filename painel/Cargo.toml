@@ -14,10 +14,9 @@ license = "MIT"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Fixado num commit do RavenRS: o master eff963ac2 (o do design system do RCB) mais
-# o FlowCanvas::pan_with_wheel do PR alexkads/RavenRS#791. Juntado o PR, volta a um
-# commit do master.
-ravenrs = { git = "https://github.com/alexkads/RavenRS", rev = "cf4f790cce5ca204afd8a477ce572160eb647401", default-features = false, features = ["charts", "flow"] }
+# Fixado num commit do master do RavenRS: o do design system do RCB mais o
+# FlowCanvas::pan_with_wheel (alexkads/RavenRS#791).
+ravenrs = { git = "https://github.com/alexkads/RavenRS", rev = "c5dd076832863f9c5393b61f6c32d3af3a91e92b", default-features = false, features = ["charts", "flow"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
