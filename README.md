@@ -92,6 +92,8 @@ A tabela completa, as receitas ("quero menos calor", "quero frear mais cedo") e 
 
 ## Desenvolver
 
+Toda mudança começa por uma **issue** e entra por um **PR** para o `main`, nunca direto. O formato de cada um está no [`CLAUDE.md`](CLAUDE.md).
+
 ```bash
 cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
 ```
