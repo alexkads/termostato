@@ -72,6 +72,58 @@ A linha do journal na arrancada:
 - Durante a build, a CPU ficou entre **80 e 88 °C**, com a frequência média em ~2,4 GHz. Os "129 °C previstos" não são uma temperatura real: é para onde ela iria naquele ritmo, o bastante para a curva saber que precisava frear forte.
 - **A medição não chegou ao fim.** Por volta dos 14 min, já depois do último dado (80 °C), a fedora parou de responder por completo (SSH, Tailscale e Grafana), com o e2e de outra sessão na fila para começar. A causa ainda não foi investigada; o último dado de temperatura antes disso estava normal.
 
+## O diagnóstico de 22/11/2026: o calor não sai do chip
+
+Com o freio do termostato desligado (`pl1_normal_w=100 pl1_freio_w=100`, por ajuste), as ventoinhas pela curva e o Jenkins rodando ao lado, o comando novo `sudo termostato estresse segundos=60` (CPU nos 8 threads, 3 GB de memória e 1 GB de disco):
+
+| Medida | Resultado |
+|---|---|
+| Chip | 95 °C em 2 s; **99–100 °C** do 14º segundo até o fim |
+| Núcleos (média da segunda metade) | 97 / 97 / 99 / 92 °C. O núcleo 2 é sempre o mais quente, e o 3 o mais frio |
+| Potência | 41 W de média, 46 W de pico |
+| Frequência | ~3.090 MHz, caindo para 2.900 nos estrangulamentos |
+| Ventoinhas | 100 % do máximo (6.157 / 5.700 RPM) do começo ao fim |
+| Perto da CPU (`TC0P`) | 56 → 66 °C |
+| **Dissipador (`TH0*`)** | **44 → 47 °C**: quase não esquenta |
+| Estrangulamentos | 10.289 no pacote, **16,4 s** dos 61 s estrangulado. Por núcleo: 765 / 163 / **9.719** / 0 |
+| Memória | 26 voltas de escrita e conferência, 0 erros |
+| Disco | Grava 113 MB/s e lê 92 MB/s (fora do cache), 0 erros |
+
+O diagnóstico do comando: 🧱 **o calor não sai do chip**. As ventoinhas já estão no máximo e o ar interno está frio (39 °C), mas o dissipador não esquenta: o calor fica preso entre o chip e o dissipador. Numa máquina de 2014, quase sempre é a **pasta térmica ressecada**. Os núcleos estão parelhos (7 °C entre o mais quente e o mais frio, abaixo dos 8 °C do critério), mas o núcleo 2 sozinho fez 94 % dos estrangulamentos.
+
+Uma carga curta antes disso (`openssl speed`, ~20 s) chegou a puxar **57–72 W**, com o chip de 64 a 98 °C em 2 s.
+
+### O que o chip diz que o freou
+
+Os registros de motivo do próprio processador (`MSR 0x690`, `MSR_CORE_PERF_LIMIT_REASONS`, e `0x1B1`), lidos desde o boot de 19/11:
+
+| Motivo | Aconteceu? |
+|---|---|
+| Térmico (o chip no limite) | **sim** |
+| Limite de potência PL1 e PL2 | **sim** |
+| Corrente (EDP) | **sim** |
+| Turbo máximo | sim (é o teto normal) |
+| **PROCHOT externo** (o SMC ou o carregador freando a CPU por fora) | **nunca** |
+| Regulador de tensão quente (VR) | nunca |
+
+O processador continua agindo como um de notebook: os estados de repouso fundos funcionam (a CPU 0 passou 57 % do tempo em C7s) e ninguém de fora o freou. O que o limita é o próprio calor.
+
+### O TCC de 92 °C não segura
+
+O termostato grava o TCC offset de 8 °C (`MSR 0x1A2`), para o chip se frear a 92 °C. No teste, o chip ficou em **99–100 °C** mesmo assim. Neste Haswell, o offset é aceito e lido de volta, mas não muda onde o chip se freia. Quem protege o chip é o corte de fábrica (TjMax de 100 °C).
+
+### A bateria descarrega com o carregador ligado
+
+O carregador está ligado (`ADP1 online = 1`), mas a bateria passa a **descarregar** sempre que a CPU acelera:
+
+| CPU | Bateria |
+|---|---|
+| 11–12 W | carregando, ~600 mA |
+| 17 W | descarregando, 1.312 mA |
+| ~40 W (no estresse) | descarregando, 1.000–1.360 mA (~15 W saindo da bateria) |
+
+Os limites da Apple (PL1 de 100 W) deixam o chip pedir mais do que o carregador dá. Até agora o SMC não freou a CPU por isso (sem PROCHOT), mas uma carga longa pode esvaziar a bateria. O MacBookPro11,2 pede o carregador MagSafe 2 de **85 W**. Vale conferir a etiqueta do que está ligado. Bateria: 127 ciclos, 7,77 Ah de 8,6 Ah de fábrica (90 %).
+
 ## Próximos passos
 
 O inventário mostrou o que o hardware oferece e o termostato ainda não usa:

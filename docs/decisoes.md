@@ -150,3 +150,10 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 
 **Decisão.** O `POST /api/ajustes` exige o cabeçalho `Tailscale-User-Login` de um login listado em `[painel] quem_pode_ajustar` (que só muda no toml, reiniciando), corpo JSON e `Origin` do próprio host.
 **Por quê.** O `tailscale serve` identifica quem pede sem senha nova. O JSON obriga o navegador a um preflight de CORS que o servidor não responde, e o `Origin` barra outra página aberta no navegador do dono. Um processo local poderia forjar o cabeçalho no loopback, mas na fedora o único usuário já tem `sudo` sem senha: não há ganho de privilégio.
+
+## 27. O estresse dentro do termostato, sem `stress-ng`
+
+**Contexto.** Em 22/11/2026, para descobrir onde a fedora para, o teste foi feito à mão: `openssl speed` para a carga e um laço de shell lendo o sysfs. O `openssl speed` terminou em ~20 s em vez dos 90 s pedidos, e a potência saiu vazia na primeira volta, porque só o root lê o `energy_uj`.
+**Decisão.** Um subcomando, `termostato estresse`, que gera a carga em Rust (CPU, memória com conferência, disco com `fsync` e leitura fora do cache) e lê os sensores com o mesmo código do serviço (`hardware.rs`). Ele não mexe em limite, ventoinha nem ajuste.
+**Por quê.** Os sensores que dizem onde está o gargalo (`TC0P`, os `TH0*` do dissipador, as ventoinhas em % do máximo, os estrangulamentos) já são lidos pelo termostato, e o `stress-ng` não os conhece. Um pacote a menos na fedora, e o teste fica repetível: o mesmo comando antes e depois de trocar a pasta térmica. Deixar o freio com o serviço mede a máquina com a configuração real.
+

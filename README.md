@@ -61,6 +61,7 @@ ssh fedora 'cd ~/oficina/repos/termostato && ./instalar.sh'
 - **Painel:** http://macpro-i7-alex:3000/d/termostato (pela tailnet)
 - **Ao vivo:** `ssh fedora 'journalctl -u termostato -f'`
 - **Ajustar:** `ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'`
+- **Achar o limite da máquina:** `ssh -t fedora 'sudo termostato estresse'` leva CPU, memória e disco ao limite por 60 s, com os sensores lado a lado, e diz onde está o gargalo (ver [Operação](docs/operacao.md#estressar-a-máquina-termostato-estresse))
 
 ## A configuração
 
