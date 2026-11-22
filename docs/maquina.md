@@ -116,10 +116,19 @@ O que isso quer dizer:
 
 É o retrato de um **heat pipe que não transporta calor**: a solda com a placa de cobre trincada, ou o tubo furado (sem o fluido, ele vira um tubo de cobre comum). O contato do dissipador solto daria um quadro parecido, e é mais barato de conferir.
 
+**Mas outros donos veem o mesmo quadro, e trocar o dissipador não resolveu para eles** (pesquisado em 22/11/2026):
+
+- [Num MacBook Pro Retina 15" Late 2013](https://forums.macrumors.com/threads/hypothesis-re-high-temp-overheating-on-late-2013-macbook-pro-retina-due-to-high-vapor-point-in-heatpipe.2238074/), o dono via a CPU em 80 °C ou mais com o heat pipe bem mais frio. Outro dono trocou o heat pipe **três vezes**, comprando pelo AliExpress, e nada mudou.
+- [No iFixit](https://ts.ifixit.com/Answers/View/538140/Is+my+heat+sink+broken), um dono trocou a pasta e depois **dois dissipadores usados**. A carga seguiu em 95–98 °C, com o calor chegando só ao começo das aletas.
+- [Num Mid 2014 15"](https://forums.macrumors.com/threads/cannot-get-a-good-repaste-on-2014-15-macbook-pro.2437146/), o dono passou por PTM7950 duas vezes, MX-6 duas vezes e trocou o dissipador. O que ajudou foi aplicar a pasta **o mais fina possível** e apertar o dissipador **por igual**: a diferença entre núcleos caiu de 15 °C para 2–3 °C. Mesmo assim, com undervolt, pads térmicos até a carcaça e uma base com ventoinha, ele segura 3,5 GHz com o pacote em **96–97 °C**. Nesses modelos, 95–100 °C em carga cheia é comum.
+
+Então o dissipador frio com o chip quente pode ser **o jeito deste projeto** (os heat pipes só levam bem o calor com o chip já muito quente), e não um defeito desta máquina. Comprar um dissipador novo **pode não mudar nada**.
+
 **O que fazer:**
-1. Abrir e conferir os parafusos do dissipador (os de mola, em volta da CPU). Solto, basta apertar.
+1. Fazer primeiro o teste da mão na saída de ar (abaixo). Se o ar sair quente, o dissipador está trabalhando, e não há o que trocar.
+2. Abrir e conferir os parafusos do dissipador (os de mola, em volta da CPU). Solto, basta apertar.
 2. Olhar a junta entre o heat pipe e a placa de cobre sobre o chip. Trinca ou folga ali confirma a quebra.
-3. Se estiver quebrada: **trocar o dissipador inteiro** (o heat pipe vem soldado nele), com pasta nova. Atenção ao modelo: o MacBookPro11,2 (A1398, só Iris Pro) usa o dissipador **sem a placa da GPU dedicada**. O do MacBookPro11,3 (com GeForce GT 750M) é outro.
+3. Trocar o dissipador **só se a junta estiver visivelmente quebrada**: o **dissipador inteiro** (o heat pipe vem soldado nele), com pasta nova. Atenção ao modelo: o MacBookPro11,2 (A1398, só Iris Pro) usa o dissipador **sem a placa da GPU dedicada**. O do MacBookPro11,3 (com GeForce GT 750M) é outro.
 4. Depois, repetir `sudo termostato estresse segundos=60`. Com o dissipador bom, os `TH0*` e o ar de saída sobem junto com o chip, e o 🧱 vira 🔥 ou ✅.
 
 **Um teste sem abrir:** com o `termostato estresse` rodando, ponha a mão na saída de ar da dobradiça. Com o chip a 99 °C e as ventoinhas no máximo, o ar deveria sair quente. Saindo morno, o calor não está chegando às aletas.
