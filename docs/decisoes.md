@@ -150,3 +150,28 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 
 **Decisão.** O `POST /api/ajustes` exige o cabeçalho `Tailscale-User-Login` de um login listado em `[painel] quem_pode_ajustar` (que só muda no toml, reiniciando), corpo JSON e `Origin` do próprio host.
 **Por quê.** O `tailscale serve` identifica quem pede sem senha nova. O JSON obriga o navegador a um preflight de CORS que o servidor não responde, e o `Origin` barra outra página aberta no navegador do dono. Um processo local poderia forjar o cabeçalho no loopback, mas na fedora o único usuário já tem `sudo` sem senha: não há ganho de privilégio.
+
+## 27. O estresse dentro do termostato, sem `stress-ng`
+
+**Contexto.** Em 22/11/2026, para descobrir onde a fedora para, o teste foi feito à mão: `openssl speed` para a carga e um laço de shell lendo o sysfs. O `openssl speed` terminou em ~20 s em vez dos 90 s pedidos, e a potência saiu vazia na primeira volta, porque só o root lê o `energy_uj`.
+**Decisão.** Um subcomando, `termostato estresse`, que gera a carga em Rust (CPU, memória com conferência, disco com `fsync` e leitura fora do cache) e lê os sensores com o mesmo código do serviço (`hardware.rs`). Ele não mexe em limite, ventoinha nem ajuste.
+**Por quê.** Os sensores que dizem onde está o gargalo (`TC0P`, os `TH0*` do dissipador, as ventoinhas em % do máximo, os estrangulamentos) já são lidos pelo termostato, e o `stress-ng` não os conhece. Um pacote a menos na fedora, e o teste fica repetível: o mesmo comando antes e depois de trocar a pasta térmica. Deixar o freio com o serviço mede a máquina com a configuração real.
+
+## 28. A caixa-preta no disco, e não só no journal
+
+**Contexto.** O travamento de 19/11/2026 (18:32) só foi explicado em 22/11, cavando o dump do OOM no `journalctl -k`: oito `rustc` com ~1,5 GB de RAM e ~1,4 GB de swap cada esgotaram os 16 GB de swap. O OOM killer matou o traefik (18 MB) e deixou os `rustc`. O termostato não tinha guardado quem segurava a memória, nem o swap, nem a bateria.
+**Decisão.** Uma linha JSON por leitura num arquivo por hora em `/var/lib/termostato/caixa-preta/`, com `fsync` a cada 10 s, em anel (24 h, 50 MB). Um marcador de parada limpa diz, na subida, se houve queda; o `boot_id` de cada linha separa a máquina que travou do serviço que foi morto.
+**Por quê.** Quando a máquina trava por memória, o journal do serviço é o primeiro a ficar para trás: o que não foi gravado no disco se perde. Um arquivo próprio, sincronizado a cada 10 s, perde no máximo os últimos 10 s. A hora por arquivo deixa a poda barata (apagar arquivos inteiros) e o `jq` lê direto.
+
+## 29. Ler o motivo do freio no chip, e não adivinhar
+
+**Contexto.** A hipótese de 22/11 era que o processador tinha deixado de agir como de notebook: o SMC ou o carregador freando a CPU por fora.
+**Decisão.** Ler o `MSR 0x690` (`MSR_CORE_PERF_LIMIT_REASONS`) a cada volta, pelo mesmo driver `msr` do TCC, só lendo, sem limpar o log. Publicar cada motivo, agora e desde o boot.
+**Por quê.** O chip anota o motivo de cada redução de frequência. Em 22/11 ele mostrou térmico, PL1, PL2 e corrente, e **nunca PROCHOT externo**: a hipótese caiu em um minuto. Sem limpar o log, o "desde o boot" continua valendo para quem ler à mão.
+
+## 30. Limpar o log do `MSR 0x690` a cada leitura (revendo a 29)
+
+**Contexto.** Em 22/11/2026, o carregador de 85 W da fedora foi trocado por um mais fraco, e a caixa-preta pegou um PROCHOT de 2 s, porque ele caiu numa leitura. Um PROCHOT de meio segundo entre duas leituras sumiria, e sem limpar o log ele só diria "aconteceu desde o boot".
+**Decisão.** A cada volta, o termostato lê o `0x690` e grava o mesmo valor com os bits de log (16–29) zerados. Um motivo vale para a leitura se o bit de agora ou o de log estiver ligado. O "desde o boot" vira um acumulado do próprio termostato, guardado em `<estado>/motivos-<boot_id>` para sobreviver a um reinício do serviço. Se a gravação falhar, um ⚠️ e segue só lendo.
+**Por quê.** Assim cada evento é contado e datado com a precisão de uma leitura, que é o que o dono pediu: o registro de cada PROCHOT. O custo é que, quem ler o `0x690` à mão, vê só o que aconteceu nos últimos 2 s. O "desde o boot" está na métrica `termostato_freio_motivo{quando="desde_o_boot"}`.
+

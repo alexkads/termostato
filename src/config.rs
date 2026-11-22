@@ -114,6 +114,25 @@ impl Default for ConfigMaos {
     }
 }
 
+/// A caixa-preta: o que aconteceu até o último segundo (ver `caixa_preta.rs`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ConfigCaixaPreta {
+    /// Quantas horas ficam guardadas.
+    pub horas: u64,
+    /// O teto de espaço, em MB.
+    pub mb_max: u64,
+}
+
+impl Default for ConfigCaixaPreta {
+    fn default() -> Self {
+        Self {
+            horas: 24,
+            mb_max: 50,
+        }
+    }
+}
+
 /// O painel em `/` e a API dele.
 #[derive(Debug, Clone, PartialEq, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -212,6 +231,7 @@ pub struct Config {
     pub maos: ConfigMaos,
     pub grafana: ConfigGrafana,
     pub painel: ConfigPainel,
+    pub caixa_preta: ConfigCaixaPreta,
 }
 
 impl Default for Config {
@@ -247,6 +267,7 @@ impl Default for Config {
             maos: ConfigMaos::default(),
             grafana: ConfigGrafana::default(),
             painel: ConfigPainel::default(),
+            caixa_preta: ConfigCaixaPreta::default(),
         }
     }
 }
@@ -287,6 +308,18 @@ impl Config {
             return Err(format!(
                 "alvo_ganho_w_por_c_s = {} fora de 0,01 a 10",
                 self.alvo_ganho_w_por_c_s
+            ));
+        }
+        Ok(())
+    }
+
+    /// A caixa-preta.
+    fn validar_caixa_preta(&self) -> Result<(), String> {
+        let c = &self.caixa_preta;
+        if !(1..=168).contains(&c.horas) || !(1..=2000).contains(&c.mb_max) {
+            return Err(format!(
+                "caixa_preta: horas = {} (de 1 a 168) e mb_max = {} (de 1 a 2000 MB)",
+                c.horas, c.mb_max
             ));
         }
         Ok(())
@@ -373,6 +406,7 @@ impl Config {
         }
         self.validar_alvo()?;
         self.validar_ventoinhas()?;
+        self.validar_caixa_preta()?;
         if !(0.5..=60.0).contains(&self.intervalo_s) {
             return Err(format!(
                 "intervalo_s = {} fora de 0,5 a 60 s",
@@ -434,6 +468,18 @@ impl Config {
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn caixa_preta_fora_da_faixa_e_recusada() {
+        let c: Config = toml::from_str("[caixa_preta]\nhoras = 48\nmb_max = 100").unwrap();
+        assert!(c.validar().is_ok());
+        assert_eq!((c.caixa_preta.horas, c.caixa_preta.mb_max), (48, 100));
+        for texto in ["[caixa_preta]\nmb_max = 0", "[caixa_preta]\nhoras = 500"] {
+            let c: Config = toml::from_str(texto).unwrap();
+            let e = c.validar().unwrap_err();
+            assert!(e.contains("caixa_preta"), "{e}");
+        }
+    }
 
     #[test]
     fn arquivo_vazio_vale_os_padroes() {

@@ -123,3 +123,61 @@ groups:
               type: threshold
               expression: B
               conditions: [ { evaluator: { type: gt, params: [20] } } ]
+
+      - uid: termostato-bateria-no-carregador
+        title: A bateria descarrega com o carregador ligado há mais de 10 min
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { gravidade: aviso }
+        annotations:
+          summary: "A bateria da fedora descarrega mesmo com o carregador ligado: ele não dá conta da carga."
+          description: "Visto em 22/11/2026 a partir de ~17 W de CPU. Confira se o carregador é o MagSafe 2 de 85 W. Com a bateria vazia, o SMC pode frear a CPU por fora (PROCHOT): veja o painel 'Por que o chip está freado'."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              expr: 'max(termostato_bateria_amperes < -0.1 and on() termostato_carregador_ligado == 1) or on() vector(0)'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [ { evaluator: { type: lt, params: [-0.1] } } ]
+
+      - uid: termostato-prochot
+        title: A CPU foi freada por fora (PROCHOT)
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { gravidade: aviso }
+        annotations:
+          summary: "O SMC ou o carregador freou a CPU da fedora por fora (PROCHOT): a frequência cai para ~800 MHz enquanto durar."
+          description: "Visto em 22/11/2026 com o carregador mais fraco que o de 85 W. Veja `journalctl -u termostato | grep ⛔` (MHz, chip, CPU e bateria no momento) e o painel 'PROCHOT e bateria no carregador'. O conserto é o MagSafe 2 de 85 W."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              expr: 'sum(increase(termostato_prochot_eventos_total[5m])) or on() vector(0)'
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [ { evaluator: { type: gt, params: [0] } } ]

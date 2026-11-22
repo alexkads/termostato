@@ -96,3 +96,11 @@ nunca = [
 [grafana]
 url = ""                    # ex.: "http://grafana.local:3000"; vazio = sem anotações
 token_arquivo = "/etc/termostato/grafana.token"
+
+# A caixa-preta: a cada leitura, uma linha com o que explica um travamento
+# (cada núcleo, motivos do freio do chip, bateria, swap, OOM e quem segura a
+# memória), em /var/lib/termostato/caixa-preta/. Depois de uma queda, o boot
+# seguinte escreve 💥 no journal e no Grafana com a última leitura.
+[caixa_preta]
+horas = 24                  # quantas horas ficam guardadas (1 a 168)
+mb_max = 50                 # teto de espaço, em MB (1 a 2000)
