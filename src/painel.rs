@@ -178,7 +178,7 @@ pub fn estado_json(
             "pl1_normal": cfg.pl1_normal_w,
             "potencia": r.potencia_w,
             "frequencia_mhz": r.frequencia_mhz,
-            "tcc_corte": r.tjmax_c.zip(r.tcc_offset_c).map(|(t, o)| t.saturating_sub(o)),
+            "tcc_corte": r.corte_c(),
             "psi_memoria": r.pressao.as_ref().map(|p| p.memoria_some_pct),
             "freio_acionado": r.freio_acionado,
             "freio_intensidade": r.freio_intensidade,

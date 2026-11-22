@@ -301,6 +301,62 @@ pub fn estrangulamento(sysfs: &Path) -> Option<(u64, u64)> {
     Some((pacote, nucleos))
 }
 
+/// A temperatura de cada núcleo físico (`coretemp`, rótulo "Core N"), em
+/// ordem de núcleo.
+pub fn nucleos_celsius(sysfs: &Path) -> Vec<(u32, f64)> {
+    let Some(pasta) = hwmon(sysfs, "coretemp") else {
+        return Vec::new();
+    };
+    let mut v: Vec<(u32, f64)> = fs::read_dir(&pasta)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|e| {
+            let nome = e.file_name().into_string().ok()?;
+            let base = nome.strip_suffix("_label")?;
+            let rotulo = fs::read_to_string(e.path()).ok()?;
+            let nucleo = rotulo.trim().strip_prefix("Core ")?.parse().ok()?;
+            let mili = ler_u64(&pasta.join(format!("{base}_input"))).ok()?;
+            Some((nucleo, mili as f64 / 1000.0))
+        })
+        .collect();
+    v.sort_by_key(|(n, _)| *n);
+    v
+}
+
+/// Os estrangulamentos de cada núcleo físico desde o boot, pelo `core_id`
+/// (as duas threads de um núcleo dão o mesmo contador).
+pub fn estrangulamento_por_nucleo(sysfs: &Path) -> Vec<(u32, u64)> {
+    let base = sysfs.join("devices/system/cpu");
+    let mut v: Vec<(u32, u64)> = Vec::new();
+    for e in fs::read_dir(&base)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+    {
+        let p = e.path();
+        let (Ok(id), Ok(n)) = (
+            ler_u64(&p.join("topology/core_id")),
+            ler_u64(&p.join("thermal_throttle/core_throttle_count")),
+        ) else {
+            continue;
+        };
+        let id = id as u32;
+        match v.iter_mut().find(|(i, _)| *i == id) {
+            Some(item) => item.1 = item.1.max(n),
+            None => v.push((id, n)),
+        }
+    }
+    v.sort_by_key(|(i, _)| *i);
+    v
+}
+
+/// O tempo total com o pacote estrangulado desde o boot, em ms.
+pub fn estrangulado_ms(sysfs: &Path) -> Option<u64> {
+    ler_u64(&sysfs.join("devices/system/cpu/cpu0/thermal_throttle/package_throttle_total_time_ms"))
+        .ok()
+}
+
 /// Um domínio de potência do RAPL além do pacote: `core` (os núcleos),
 /// `uncore` (o gráfico e o resto do chip) e `dram` (a memória).
 pub struct Dominio {
@@ -393,6 +449,49 @@ mod testes_do_kernel {
             fs::write(p.join("package_throttle_count"), "342193\n").unwrap();
         }
         assert_eq!(estrangulamento(d.path()), Some((342_193, 22)));
+    }
+
+    #[test]
+    fn nucleos_e_estrangulamento_por_nucleo() {
+        let d = tempfile::tempdir().unwrap();
+        sysfs_de_teste::montar(d.path(), 70);
+        let hw = d.path().join("class/hwmon/hwmon3");
+        for (i, (rotulo, mili)) in [
+            ("Package id 0", 70000),
+            ("Core 1", 66000),
+            ("Core 0", 61000),
+        ]
+        .iter()
+        .enumerate()
+        {
+            fs::write(
+                hw.join(format!("temp{}_label", i + 1)),
+                format!("{rotulo}\n"),
+            )
+            .unwrap();
+            fs::write(hw.join(format!("temp{}_input", i + 1)), format!("{mili}\n")).unwrap();
+        }
+        assert_eq!(nucleos_celsius(d.path()), vec![(0, 61.0), (1, 66.0)]);
+        // cpu0 e cpu2 são o núcleo 0; cpu1 e cpu3, o núcleo 1.
+        for (cpu, nucleo, n) in [(0, 0, 5), (1, 1, 9), (2, 0, 5), (3, 1, 9)] {
+            let p = d.path().join(format!("devices/system/cpu/cpu{cpu}"));
+            fs::create_dir_all(p.join("topology")).unwrap();
+            fs::create_dir_all(p.join("thermal_throttle")).unwrap();
+            fs::write(p.join("topology/core_id"), format!("{nucleo}\n")).unwrap();
+            fs::write(
+                p.join("thermal_throttle/core_throttle_count"),
+                format!("{n}\n"),
+            )
+            .unwrap();
+        }
+        fs::write(
+            d.path()
+                .join("devices/system/cpu/cpu0/thermal_throttle/package_throttle_total_time_ms"),
+            "1234\n",
+        )
+        .unwrap();
+        assert_eq!(estrangulamento_por_nucleo(d.path()), vec![(0, 5), (1, 9)]);
+        assert_eq!(estrangulado_ms(d.path()), Some(1234));
     }
 
     #[test]

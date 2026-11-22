@@ -9,6 +9,8 @@
 //!   estrangulou por calor desde o boot.
 //! - **Domínios do RAPL**: a potência dos núcleos, do gráfico e da memória.
 //! - **Sensores do Mac**: os 35 do `applesmc`.
+//! - **O vigia** (`vigia.rs`): cada núcleo, os motivos do freio do chip, a
+//!   bateria, o swap, o OOM e quem segura a memória.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,11 +22,19 @@ use crate::gatilhos::{self, Alarme};
 use crate::hardware::{self, Dominio};
 use crate::metricas::Retrato;
 use crate::tcc::Msr;
+use crate::vigia::{self, Motivos, Vmstat};
 
 /// De quantas em quantas voltas o TCC offset é conferido (15 × 2 s = 30 s).
 const CONFERIR_TCC_A_CADA: u64 = 15;
 /// Intervalo mínimo entre dois avisos de pressão no journal.
 const AVISO_DE_PRESSAO_S: f64 = 30.0;
+/// De quantas em quantas voltas quem segura a memória é lido (5 × 2 s = 10 s):
+/// ler o `/proc/<pid>/status` de ~500 processos a cada volta é caro à toa.
+const MEMORIA_A_CADA: u64 = 5;
+/// A bateria descarregando no carregador por tanto tempo vira aviso.
+const DESCARGA_AVISO_S: f64 = 300.0;
+/// Acima do corte por mais que isso, o TCC offset não está sendo respeitado.
+const FOLGA_DO_CORTE_C: f64 = 2.0;
 
 pub struct Kernel {
     sysfs: PathBuf,
@@ -34,6 +44,11 @@ pub struct Kernel {
     dominios: Vec<Dominio>,
     voltas: u64,
     ultimo_aviso_de_pressao_s: Option<f64>,
+    proc: PathBuf,
+    vmstat_anterior: Option<(Vmstat, f64)>,
+    avisou_tcc: bool,
+    descarregando_desde: Option<f64>,
+    avisou_descarga: bool,
 }
 
 impl Kernel {
@@ -57,6 +72,11 @@ impl Kernel {
             alarme: None,
             voltas: 0,
             ultimo_aviso_de_pressao_s: None,
+            proc: PathBuf::from(&cfg.proc),
+            vmstat_anterior: None,
+            avisou_tcc: false,
+            descarregando_desde: None,
+            avisou_descarga: false,
         };
         k.garantir_tcc(avisador, true);
         if cfg.psi_parado_ms > 0 {
@@ -158,5 +178,79 @@ impl Kernel {
             .filter_map(|d| d.potencia_w().map(|w| (d.nome.clone(), w)))
             .collect();
         retrato.sensores_do_mac = hardware::sensores_do_mac(&self.sysfs);
+        self.vigiar(agora_s, avisador, retrato);
+    }
+
+    /// A bateria descarregando com o carregador ligado por 5 min seguidos vira
+    /// um aviso (uma vez por episódio): o carregador não dá conta da carga.
+    fn olhar_a_bateria(&mut self, agora_s: f64, avisador: &Avisador, retrato: &Retrato) {
+        let descarrega = retrato
+            .bateria
+            .as_ref()
+            .is_some_and(vigia::Bateria::descarrega_no_carregador);
+        if !descarrega {
+            self.descarregando_desde = None;
+            self.avisou_descarga = false;
+            return;
+        }
+        let desde = *self.descarregando_desde.get_or_insert(agora_s);
+        if !self.avisou_descarga && agora_s - desde >= DESCARGA_AVISO_S {
+            self.avisou_descarga = true;
+            let a = retrato
+                .bateria
+                .as_ref()
+                .and_then(|b| b.amperes)
+                .unwrap_or(0.0);
+            let texto = format!(
+                "🔋 a bateria descarrega com o carregador ligado há {:.0} min ({a:+.2} A, CPU em {:.0} W): o carregador não dá conta da carga",
+                (agora_s - desde) / 60.0,
+                retrato.potencia_w.unwrap_or(0.0)
+            );
+            println!("{texto}");
+            avisador.avisar(Aviso::novo(texto, &["bateria"]));
+        }
+    }
+
+    /// O que realmente acontece na máquina: núcleos, motivos do freio,
+    /// bateria, swap e memória.
+    fn vigiar(&mut self, agora_s: f64, avisador: &Avisador, retrato: &mut Retrato) {
+        retrato.nucleos_c = hardware::nucleos_celsius(&self.sysfs);
+        retrato.nucleos_estrangulamento = hardware::estrangulamento_por_nucleo(&self.sysfs);
+        retrato.estrangulado_s =
+            hardware::estrangulado_ms(&self.sysfs).map(|ms| ms as f64 / 1000.0);
+        retrato.motivos = self
+            .msr
+            .as_ref()
+            .and_then(|m| m.ler(vigia::MSR_MOTIVOS).ok())
+            .map(Motivos::decodificar);
+        retrato.bateria = vigia::bateria(&self.sysfs);
+        self.olhar_a_bateria(agora_s, avisador, retrato);
+        if let Ok(texto) = std::fs::read_to_string(self.proc.join("vmstat")) {
+            let v = vigia::vmstat(&texto);
+            if let Some((antes, quando)) = self.vmstat_anterior {
+                retrato.swap_mb_s = Some(vigia::swap_mb_s(antes, v, agora_s - quando));
+            }
+            retrato.oom_mortes = Some(v.oom_kill);
+            self.vmstat_anterior = Some((v, agora_s));
+        }
+        if self.voltas % MEMORIA_A_CADA == 1 {
+            retrato.memoria_maiores = vigia::maiores_em_memoria(&self.proc, 5);
+        }
+        if let (Some(t), Some(o), Some(tj)) =
+            (retrato.temperatura_c, retrato.tcc_offset_c, retrato.tjmax_c)
+            && o > 0
+            && t > f64::from(tj.saturating_sub(o)) + FOLGA_DO_CORTE_C
+        {
+            retrato.tcc_ignorado = true;
+            if !self.avisou_tcc {
+                self.avisou_tcc = true;
+                let texto = format!(
+                    "🛡️ o chip chegou a {t:.0} °C, acima do corte de {} °C do TCC offset: este chip não respeita o offset, e quem o protege é o TjMax de {tj} °C",
+                    tj.saturating_sub(o)
+                );
+                println!("{texto}");
+                avisador.avisar(Aviso::novo(texto, &["tcc"]));
+            }
+        }
     }
 }

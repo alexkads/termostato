@@ -41,6 +41,7 @@ pub const SO_NA_SUBIDA: &[&str] = &[
     "tcc_offset_c",
     "grafana",
     "painel",
+    "caixa_preta",
 ];
 
 /// O que a linha de comando pediu.

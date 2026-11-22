@@ -4,6 +4,18 @@ Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs
 
 ## Ainda não lançado: ventoinhas pela curva
 
+- **Caixa-preta (#21):** a cada leitura, uma linha JSON em `/var/lib/termostato/caixa-preta/` com:
+  - cada núcleo e os motivos do freio do chip (`MSR 0x690`);
+  - a bateria, o PSI, a memória, o swap por segundo e as mortes do OOM;
+  - quem mais gasta CPU e quem mais segura memória.
+
+  Fica em anel (`[caixa_preta] horas = 24`, `mb_max = 50`), com `fsync` a cada 10 s. Depois de uma queda, o boot seguinte escreve 💥 no journal e no Grafana com a hora e a última leitura, e guarda o último minuto em `/var/lib/termostato/quedas/`.
+- **Métricas novas:** `termostato_nucleo_celsius`, `termostato_nucleo_estrangulamento_total`, `termostato_estrangulado_segundos_total`, `termostato_freio_motivo`, `termostato_bateria_amperes`, `termostato_bateria_carga_pct`, `termostato_carregador_ligado`, `termostato_swap_mb_por_segundo`, `termostato_oom_mortes_total`, `termostato_memoria_mb` e `termostato_tcc_respeitado`.
+- **O corte do TCC diz a verdade:** quando o chip passa do corte do offset, o termostato avisa (🛡️), e o `termostato_tcc_corte_celsius` e o painel passam a mostrar o TjMax (100 °C).
+- **🔋 Aviso da bateria:** descarregando com o carregador ligado por 5 min seguidos.
+- **Grafana:** faixa nova "O que realmente acontece" (cada núcleo, estrangulamentos por núcleo, por que o chip está freado, bateria e carregador, swap e OOM, quem segura a memória) e o alerta "A bateria descarrega com o carregador ligado há mais de 10 min".
+- **`termostato estresse`** leva a CPU, a memória e o disco ao limite por 60 s (ou `segundos=`). A cada 2 s mostra o chip, o sensor perto da CPU, o dissipador, os watts, os MHz, as ventoinhas, a memória disponível, os MB/s do disco e os estrangulamentos. No fim, o resumo diz onde a máquina parou: 🧱 o calor não sai do chip, 🌀 as ventoinhas não acompanharam, 🔥 o resfriamento chegou ao limite ou ✅ aguentou. A memória é conferida a cada volta e o disco é relido fora do cache. Proteções: 10 % da memória sempre livre, devolução abaixo de 5 %, espaço em disco conferido antes, arquivo apagado no Ctrl+C e parada com o chip 30 s em 99 °C (#19).
+- **Cada núcleo no estresse:** a temperatura de cada núcleo físico a cada linha. No resumo, a média e o pico por núcleo, os estrangulamentos por núcleo, o tempo total estrangulado e se os núcleos estão parelhos ou desiguais (⚖️, mais de 8 °C de diferença).
 - **Novo modo `ventoinhas = "curva"`, agora o padrão.** O piso das ventoinhas acompanha a temperatura média dos últimos ~20 s: fica no mínimo (2000 RPM) até 60 °C, sobe em linha reta e chega ao máximo em 80 °C, onde o freio começa. Uma arrancada curta do turbo quase não mexe nele; sem leitura de temperatura, vai ao máximo. Desce devagar (50 RPM/s). O SMC continua livre para soprar acima do piso.
 - Novos parâmetros: `ventoinhas_calma_ate_c`, `ventoinhas_maximo_em_c`, `ventoinhas_minimo_rpm` e `ventoinhas_descida_rpm_por_s` e `ventoinhas_suavizacao_s`, todos ajustáveis na hora (`sudo termostato ventoinhas_calma_ate_c=65`).
 - `"maximo"` continua existindo. Um `/etc/termostato.toml` já instalado com `ventoinhas = "maximo"` não muda sozinho: troque com `sudo termostato ventoinhas=curva`.

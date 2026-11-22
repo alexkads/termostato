@@ -17,10 +17,13 @@
 //!   sudo termostato CPU50C              # ajustes com o serviço rodando
 //!   sudo termostato chave=valor …       # (ver `ajustes.rs`)
 //!   termostato ajustes                  # o que está em vigor
+//!   sudo termostato estresse [cpu] [memoria] [disco] …  # (ver `estresse.rs`)
 
 mod ajustes;
 mod avisos;
+mod caixa_preta;
 mod config;
+mod estresse;
 mod fabrica;
 mod freio;
 mod gatilhos;
@@ -35,6 +38,7 @@ mod pressao;
 mod processos;
 mod sopro;
 mod tcc;
+mod vigia;
 
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
@@ -75,6 +79,13 @@ struct Estado {
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "estresse") {
+        if let Err(e) = estresse::principal(&args[1..]) {
+            eprintln!("❌ {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if let Some(pedido) = ajustes::interpretar(&args) {
         let caminho = std::env::var_os("TERMOSTATO_CONFIG")
             .map_or_else(|| PathBuf::from(CONFIG_PADRAO), PathBuf::from);
@@ -224,6 +235,25 @@ fn rodar(caminho: &Path) -> Result<(), String> {
             let _ = fabrica::regravar(estado_dir, &f);
         }
     }
+    let boot = vigia::boot_id(Path::new(&cfg.proc));
+    contar_a_queda(&cfg, &boot, &avisador);
+    let mut caixa = match caixa_preta::CaixaPreta::abrir(
+        Path::new(&cfg.estado),
+        cfg.caixa_preta.horas,
+        cfg.caixa_preta.mb_max,
+    ) {
+        Ok(c) => {
+            println!(
+                "📼 caixa-preta em {}/caixa-preta: {} h, até {} MB",
+                cfg.estado, cfg.caixa_preta.horas, cfg.caixa_preta.mb_max
+            );
+            Some(c)
+        }
+        Err(e) => {
+            eprintln!("⚠️ caixa-preta: {e}: sigo sem ela");
+            None
+        }
+    };
     let mut guardiao = Guardiao::novo(&cfg, avisador);
     guardiao.avisador().avisar(Aviso::novo(
         format!(
@@ -323,6 +353,12 @@ fn rodar(caminho: &Path) -> Result<(), String> {
             .collect();
         retrato.frequencia_mhz = hardware::frequencia_mhz(&sysfs);
         kernel.a_cada_volta(agora_s, guardiao.avisador(), &mut retrato);
+        if let Some(c) = caixa.as_mut() {
+            let t = agora_unix();
+            if let Err(e) = c.gravar(t, &caixa_preta::linha(&retrato, t, &boot)) {
+                eprintln!("⚠️ {e}");
+            }
+        }
 
         if let Ok(mut e) = estado.lock() {
             e.retrato = retrato.clone();
@@ -340,7 +376,28 @@ fn rodar(caminho: &Path) -> Result<(), String> {
 
     guardiao.parar();
     parar_seguro(rapl.as_ref(), &cfg);
+    if let Some(c) = caixa.as_mut() {
+        c.sincronizar();
+    }
+    caixa_preta::marcar_parada_limpa(Path::new(&cfg.estado));
     Ok(())
+}
+
+/// Na subida: se a parada anterior não foi limpa, conta o que a caixa-preta
+/// viu por último.
+fn contar_a_queda(cfg: &Config, boot: &str, avisador: &Avisador) {
+    let estado = Path::new(&cfg.estado);
+    let Some(q) = caixa_preta::verificar_queda(estado, boot) else {
+        return;
+    };
+    let fuso = std::fs::read("/etc/localtime").map_or(0, |b| caixa_preta::fuso_s(&b));
+    let texto = caixa_preta::descrever(&q, fuso);
+    println!("{texto}");
+    match caixa_preta::guardar_queda(estado, &q, &texto) {
+        Ok(p) => println!("📼 o último minuto antes da queda está em {}", p.display()),
+        Err(e) => eprintln!("⚠️ {e}"),
+    }
+    avisador.avisar(Aviso::novo(texto, &["queda"]));
 }
 
 /// O arquivo de ajustes mudou: confere, troca a config e avisa o que mudou.
