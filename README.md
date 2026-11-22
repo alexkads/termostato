@@ -4,7 +4,7 @@ Um serviço em Rust que cuida de todo o calor da **fedora** (`macpro-i7-alex`), 
 
 **A CPU nunca fica solta.** No dia a dia ela trabalha sob o **limite normal** de potência. Quando a temperatura sobe, ou quando a **previsão** mostra que vai subir, uma **curva de freio** aperta o limite antes do pico. As ventoinhas acompanham a temperatura (quietas com a CPU fria, no máximo antes do freio), e tudo aparece no Grafana. A arrancada curta (o turbo até 3,4 GHz) continua livre: é ela que faz desse processador um foguetinho.
 
-Desde a 0.5, ele tem **superpoderes**: vê os processos e aprende quem costuma esquentar a máquina, freando **antes** quando eles aparecem; sente a pressão de memória (com o próprio kernel o acordando); segura no cgroup quem abusa (por padrão, só observando); grava no chip uma proteção que faz a **própria CPU se frear a 92 °C**; e avisa o Grafana de tudo o que faz. Ver [os superpoderes](docs/superpoderes.md).
+Desde a 0.5, ele tem **superpoderes**: vê os processos e aprende quem costuma esquentar a máquina, freando **antes** quando eles aparecem; sente a pressão de memória (com o próprio kernel o acordando); segura no cgroup quem abusa (por padrão, só observando); grava no chip o TCC offset, para a própria CPU se frear a 92 °C (este Haswell não o respeita: ver [a máquina](docs/maquina.md)); e avisa o Grafana de tudo o que faz. Ver [os superpoderes](docs/superpoderes.md).
 
 Desde a 0.8, tem **painel próprio** em `/`, feito em RavenRS e desenhado pela GPU do navegador (WebGL2): números ao vivo, o fluxo de cada decisão, gráficos, o histórico dos mal-educados e os ajustes com um clique. Na fedora: http://macpro-i7-alex:9101. Ver [o painel](docs/painel.md).
 
@@ -61,6 +61,7 @@ ssh fedora 'cd ~/oficina/repos/termostato && ./instalar.sh'
 - **Painel:** http://macpro-i7-alex:3000/d/termostato (pela tailnet)
 - **Ao vivo:** `ssh fedora 'journalctl -u termostato -f'`
 - **Ajustar:** `ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'`
+- **Depois de um travamento:** o journal diz `💥 a fedora parou às …` com a última leitura da caixa-preta (`journalctl -u termostato | grep 💥`)
 - **Achar o limite da máquina:** `ssh -t fedora 'sudo termostato estresse'` leva CPU, memória e disco ao limite por 60 s, com os sensores lado a lado, e diz onde está o gargalo (ver [Operação](docs/operacao.md#estressar-a-máquina-termostato-estresse))
 
 ## A configuração

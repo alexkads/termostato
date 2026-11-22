@@ -888,6 +888,351 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 17,
+      "type": "row",
+      "title": "O que realmente acontece: núcleos, motivos do freio, bateria e swap",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Cada núcleo",
+      "description": "A temperatura de cada núcleo físico e o pacote. Com a mesma carga, mais de 8 °C entre o mais quente e o mais frio aponta pasta térmica que não cobre o chip por igual.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_nucleo_celsius",
+          "legendFormat": "núcleo {{nucleo}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_temperatura_celsius",
+          "legendFormat": "pacote",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_tcc_corte_celsius",
+          "legendFormat": "onde o chip se freia",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Estrangulamentos por núcleo",
+      "description": "Quantas vezes cada núcleo se estrangulou por calor, por minuto, e o tempo com o pacote estrangulado.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 46,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(termostato_nucleo_estrangulamento_total[1m]) * 60",
+          "legendFormat": "núcleo {{nucleo}} (por min)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(termostato_estrangulado_segundos_total[1m]) * 100",
+          "legendFormat": "pacote estrangulado (% do tempo)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 20,
+      "type": "state-timeline",
+      "title": "Por que o chip está freado (agora)",
+      "description": "Os motivos que o próprio chip registra (MSR 0x690). prochot = o SMC ou o carregador freando a CPU por fora; termico = o chip no limite; pl1/pl2 = o limite de potência; corrente = o limite elétrico.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_freio_motivo{quando=\"agora\"}",
+          "legendFormat": "{{motivo}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "não",
+                  "color": "transparent"
+                },
+                "1": {
+                  "text": "sim",
+                  "color": "red"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Bateria e carregador",
+      "description": "Corrente da bateria: positiva carregando, negativa descarregando. Negativa com o carregador ligado quer dizer que o carregador não dá conta (o MacBookPro11,2 pede o de 85 W).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 54,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_bateria_amperes",
+          "legendFormat": "bateria (A)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_carregador_ligado",
+          "legendFormat": "carregador ligado",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_potencia_watts / 10",
+          "legendFormat": "CPU (W ÷ 10)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Swap e OOM",
+      "description": "Swap trocado por segundo e as mortes do OOM killer. O travamento de 19/11/2026 foi o swap de 16 GB esgotado.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 62,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_swap_mb_por_segundo{sentido=\"entra\"}",
+          "legendFormat": "swap entrando (MB/s)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_swap_mb_por_segundo{sentido=\"sai\"}",
+          "legendFormat": "swap saindo (MB/s)",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(termostato_oom_mortes_total[5m])",
+          "legendFormat": "mortes do OOM (5 min)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Quem segura a memória",
+      "description": "RAM e swap somados por nome de processo: os 5 maiores. O OOM killer escolhe pela pontuação, e não pelo tamanho; aqui aparece quem de fato ocupa.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 62,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_memoria_mb{tipo=\"ram\"}",
+          "legendFormat": "{{processo}} (RAM)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "termostato_memoria_mb{tipo=\"swap\"}",
+          "legendFormat": "{{processo}} (swap)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      }
     }
   ],
   "templating": {

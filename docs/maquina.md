@@ -89,7 +89,7 @@ Com o freio do termostato desligado (`pl1_normal_w=100 pl1_freio_w=100`, por aju
 | Memória | 26 voltas de escrita e conferência, 0 erros |
 | Disco | Grava 113 MB/s e lê 92 MB/s (fora do cache), 0 erros |
 
-O diagnóstico do comando: 🧱 **o calor não sai do chip**. As ventoinhas já estão no máximo e o ar interno está frio (39 °C), mas o dissipador não esquenta: o calor fica preso entre o chip e o dissipador. Numa máquina de 2014, quase sempre é a **pasta térmica ressecada**. Os núcleos estão parelhos (7 °C entre o mais quente e o mais frio, abaixo dos 8 °C do critério), mas o núcleo 2 sozinho fez 94 % dos estrangulamentos.
+O diagnóstico do comando: 🧱 **o calor não sai do chip**. As ventoinhas já estão no máximo e o ar interno está frio (39 °C), mas o dissipador não esquenta: o calor fica preso entre o chip e o dissipador. A pasta térmica **já foi trocada** (ver [Problemas conhecidos](operacao.md#problemas-conhecidos)). Então o suspeito é o **contato**: os parafusos do dissipador, pasta demais ou mal espalhada. Os núcleos estão parelhos (7 °C entre o mais quente e o mais frio, abaixo dos 8 °C do critério), mas o núcleo 2 sozinho fez 94 % dos estrangulamentos.
 
 Uma carga curta antes disso (`openssl speed`, ~20 s) chegou a puxar **57–72 W**, com o chip de 64 a 98 °C em 2 s.
 
@@ -123,6 +123,22 @@ O carregador está ligado (`ADP1 online = 1`), mas a bateria passa a **descarreg
 | ~40 W (no estresse) | descarregando, 1.000–1.360 mA (~15 W saindo da bateria) |
 
 Os limites da Apple (PL1 de 100 W) deixam o chip pedir mais do que o carregador dá. Até agora o SMC não freou a CPU por isso (sem PROCHOT), mas uma carga longa pode esvaziar a bateria. O MacBookPro11,2 pede o carregador MagSafe 2 de **85 W**. Vale conferir a etiqueta do que está ligado. Bateria: 127 ciclos, 7,77 Ah de 8,6 Ah de fábrica (90 %).
+
+## O travamento de 19/11/2026: falta de memória, e não calor
+
+A fedora parou às 18:32 (o boot −4 do journal termina sem desligamento). O dump do OOM no `journalctl -k` mostra:
+
+- **O swap de 16 GB acabou:** "Free swap = 208kB".
+- **O OOM killer disparou 4 vezes e matou os pequenos:** `traefik` (18 MB), `coredns`, `ibus-engine-tb` e `systemd-coredump`.
+- **Quem segurava a memória eram 8 `rustc`**, cada um com 1,3–1,6 GB de RAM e ~1,4 GB de swap. Era a build do VintageLightbox com `CARGO_BUILD_JOBS=8` (ver "O rojão" acima).
+- **Antes de parar,** o Docker, o Tailscale e o polkit reclamavam de timeout.
+- **Às 18:29 o chip chegou a 97 °C,** e o freio segurou.
+
+O OOM killer escolhe pela pontuação de cada processo (`oom_score_adj`), e não pelo tamanho. Por isso os `rustc` sobreviveram.
+
+No boot seguinte (desde 19/11, 19:55), não houve OOM, mas o swap trocou muito em rajadas: ~56 GB entraram e ~78 GB saíram em 2,4 dias, mais nas madrugadas.
+
+Desde então, a caixa-preta grava quem segura a memória, o swap por segundo e as mortes do OOM a cada leitura. No boot seguinte a uma queda, o journal diz 💥 com a última leitura (ver [Operação](operacao.md#a-caixa-preta)).
 
 ## Próximos passos
 
