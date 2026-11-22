@@ -87,6 +87,7 @@ A tabela completa, as receitas ("quero menos calor", "quero frear mais cedo") e 
 | [O painel](docs/painel.md) | A interface em `/`, a API e como mudar o painel |
 | [Como funciona](docs/como-funciona.md) | O laço, a previsão, a curva, o caminho até o registro da CPU, a parada segura, os testes |
 | [Operação](docs/operacao.md) | Instalar, atualizar, ajustar, acompanhar, métricas, alertas, problemas conhecidos |
+| [O resfriamento](docs/resfriamento.md) | O que a Apple, a Intel e o iFixit dizem do resfriamento deste MacBook, com os links |
 | [A máquina](docs/maquina.md) | O hardware, os sensores, as medições e o teste com a build do VintageLightbox |
 | [Decisões](docs/decisoes.md) | Cada escolha, com o contexto e o porquê |
 | [História](docs/historia.md) | Como o projeto nasceu, do primeiro susto à curva com previsão |

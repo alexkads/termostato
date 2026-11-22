@@ -74,6 +74,8 @@ A linha do journal na arrancada:
 
 ## O diagnóstico de 22/11/2026: o calor não sai do chip
 
+O que a Apple, a Intel e o iFixit dizem do resfriamento deste modelo, com os links, está em [O resfriamento](resfriamento.md).
+
 Com o freio do termostato desligado (`pl1_normal_w=100 pl1_freio_w=100`, por ajuste), as ventoinhas pela curva e o Jenkins rodando ao lado, o comando novo `sudo termostato estresse segundos=60` (CPU nos 8 threads, 3 GB de memória e 1 GB de disco):
 
 | Medida | Resultado |
