@@ -44,7 +44,7 @@ Pelas [especificações técnicas](https://support.apple.com/en-us/111935):
 | Dado | Apple | O que vimos na fedora |
 |---|---|---|
 | Processador | i7 quad-core de 2,2 GHz (Turbo até 3,4 GHz), Intel Iris Pro | O mesmo (MacBookPro11,2) |
-| **Carregador** | **MagSafe 2 de 85 W** (a Apple também vende um de 60 W) | A bateria descarrega com o carregador ligado a partir de ~17 W de CPU. **Confira se o carregador é o de 85 W** |
+| **Carregador** | **MagSafe 2 de 85 W** (a Apple também vende um de 60 W) | A bateria descarrega com o carregador ligado a partir de ~17 W de CPU. **O da fedora não é o de 85 W:** o original foi danificado pelo técnico e trocado por um mais fraco. Com a CPU acima de 30 W, a bateria descarrega em 71 % das leituras |
 | Bateria | 95 Wh, lítio-polímero | 127 ciclos, 90 % da carga de fábrica |
 | **Temperatura do ambiente para uso** | **10 a 35 °C** | A fedora roda 24 h como servidor: num quarto quente, o limite chega antes |
 | Umidade | 0 a 90 %, sem condensação | — |

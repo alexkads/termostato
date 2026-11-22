@@ -175,7 +175,19 @@ O carregador está ligado (`ADP1 online = 1`), mas a bateria passa a **descarreg
 | 17 W | descarregando, 1.312 mA |
 | ~40 W (no estresse) | descarregando, 1.000–1.360 mA (~15 W saindo da bateria) |
 
-Os limites da Apple (PL1 de 100 W) deixam o chip pedir mais do que o carregador dá. Até agora o SMC não freou a CPU por isso (sem PROCHOT), mas uma carga longa pode esvaziar a bateria. O MacBookPro11,2 pede o carregador MagSafe 2 de **85 W**. Vale conferir a etiqueta do que está ligado. Bateria: 127 ciclos, 7,77 Ah de 8,6 Ah de fábrica (90 %).
+**A causa:** o carregador original de 85 W foi danificado pelo técnico, que deu outro, de potência menor (lembrado pelo dono em 22/11/2026). A caixa-preta mediu, nas 3 h seguintes, com o carregador ligado:
+
+| CPU | Leituras descarregando | Corrente média da bateria |
+|---|---|---|
+| ≥ 10 W | 34 % | −0,11 A |
+| ≥ 20 W | 49 % | −0,38 A |
+| ≥ 30 W | 71 % | −0,82 A (~10 W saindo da bateria) |
+
+- A pior descarga com o carregador ligado foi de −2,95 A.
+- A carga ficou entre 89 e 90 %, porque a bateria recupera nos intervalos parados.
+- Às 07:48:19 apareceu o **único PROCHOT externo** do período: a CPU caiu para 798 MHz por 2 s, com o chip a 82 °C. É o SMC freando a CPU por fora, o sinal de que a energia não deu conta.
+
+Os limites da Apple (PL1 de 100 W) deixam o chip pedir mais do que este carregador dá. Até agora o SMC não freou a CPU por isso (sem PROCHOT), mas uma carga longa pode esvaziar a bateria. O MacBookPro11,2 pede o carregador MagSafe 2 de **85 W**. Vale conferir a etiqueta do que está ligado. Bateria: 127 ciclos, 7,77 Ah de 8,6 Ah de fábrica (90 %).
 
 ## O travamento de 19/11/2026: falta de memória, e não calor
 
