@@ -1,619 +1,711 @@
 {
- "versao": "0.8.0",
- "maquina": "fedora",
- "agora_unix": 1795134240,
- "agora": {
-  "temperatura": 64.0,
-  "prevista": 68.0,
-  "tendencia": 0.4,
-  "pl1": 18.2,
-  "pl1_alvo": 18.2,
-  "pl1_normal": 38.0,
-  "potencia": 15.7,
-  "frequencia_mhz": 2195,
-  "tcc_corte": 92,
-  "psi_memoria": 0.0,
-  "freio_acionado": true,
-  "freio_intensidade": 1.0,
-  "segurados": 0
- },
- "ventoinhas": [
-  {
-   "numero": "1",
-   "rpm": 6156,
-   "maximo": 6200
-  },
-  {
-   "numero": "2",
-   "rpm": 5698,
-   "maximo": 6200
-  }
- ],
- "serie": [
-  {
-   "t": 1795133650,
-   "temperatura": 58,
-   "potencia": 13.1,
-   "pl1": 15.6
-  },
-  {
-   "t": 1795133660,
-   "temperatura": 59,
-   "potencia": 13.4,
-   "pl1": 15.2
-  },
-  {
-   "t": 1795133670,
-   "temperatura": 61,
-   "potencia": 15.1,
-   "pl1": 16.9
-  },
-  {
-   "t": 1795133680,
-   "temperatura": 60,
-   "potencia": 20.6,
-   "pl1": 19.9
-  },
-  {
-   "t": 1795133690,
-   "temperatura": 62,
-   "potencia": 14,
-   "pl1": 15
-  },
-  {
-   "t": 1795133700,
-   "temperatura": 64,
-   "potencia": 20.1,
-   "pl1": 17
-  },
-  {
-   "t": 1795133710,
-   "temperatura": 63,
-   "potencia": 13.7,
-   "pl1": 15.1
-  },
-  {
-   "t": 1795133720,
-   "temperatura": 61,
-   "potencia": 15.9,
-   "pl1": 15.8
-  },
-  {
-   "t": 1795133730,
-   "temperatura": 60,
-   "potencia": 17.4,
-   "pl1": 8
-  },
-  {
-   "t": 1795133740,
-   "temperatura": 59,
-   "potencia": 14.4,
-   "pl1": 13
-  },
-  {
-   "t": 1795133750,
-   "temperatura": 61,
-   "potencia": 14.6,
-   "pl1": 11
-  },
-  {
-   "t": 1795133760,
-   "temperatura": 63,
-   "potencia": 15.6,
-   "pl1": 14.1
-  },
-  {
-   "t": 1795133770,
-   "temperatura": 66,
-   "potencia": 16.8,
-   "pl1": 18.8
-  },
-  {
-   "t": 1795133780,
-   "temperatura": 66,
-   "potencia": 15.7,
-   "pl1": 16.1
-  },
-  {
-   "t": 1795133790,
-   "temperatura": 64,
-   "potencia": 14.2,
-   "pl1": 21.1
-  },
-  {
-   "t": 1795133800,
-   "temperatura": 65,
-   "potencia": 13.5,
-   "pl1": 20.1
-  },
-  {
-   "t": 1795133810,
-   "temperatura": 67,
-   "potencia": 14.6,
-   "pl1": 18.1
-  },
-  {
-   "t": 1795133820,
-   "temperatura": 63,
-   "potencia": 21.2,
-   "pl1": 16.1
-  },
-  {
-   "t": 1795133830,
-   "temperatura": 69,
-   "potencia": 17.1,
-   "pl1": 19.1
-  },
-  {
-   "t": 1795133840,
-   "temperatura": 63,
-   "potencia": 17.7,
-   "pl1": 19.1
-  },
-  {
-   "t": 1795133850,
-   "temperatura": 64,
-   "potencia": 20.6,
-   "pl1": 18.1
-  },
-  {
-   "t": 1795133860,
-   "temperatura": 60,
-   "potencia": 14.4,
-   "pl1": 15.1
-  },
-  {
-   "t": 1795133870,
-   "temperatura": 61,
-   "potencia": 19.9,
-   "pl1": 18.1
-  },
-  {
-   "t": 1795133880,
-   "temperatura": 62,
-   "potencia": 18.2,
-   "pl1": 14.1
-  },
-  {
-   "t": 1795133890,
-   "temperatura": 60,
-   "potencia": 13.1,
-   "pl1": 15.6
-  },
-  {
-   "t": 1795133900,
-   "temperatura": 59,
-   "potencia": 13.4,
-   "pl1": 15.2
-  },
-  {
-   "t": 1795133910,
-   "temperatura": 61,
-   "potencia": 15.1,
-   "pl1": 16.9
-  },
-  {
-   "t": 1795133920,
-   "temperatura": 63,
-   "potencia": 20.6,
-   "pl1": 19.9
-  },
-  {
-   "t": 1795133930,
-   "temperatura": 65,
-   "potencia": 14,
-   "pl1": 15
-  },
-  {
-   "t": 1795133940,
-   "temperatura": 64,
-   "potencia": 20.1,
-   "pl1": 17
-  },
-  {
-   "t": 1795133950,
-   "temperatura": 66,
-   "potencia": 13.7,
-   "pl1": 15.1
-  },
-  {
-   "t": 1795133960,
-   "temperatura": 65,
-   "potencia": 15.9,
-   "pl1": 15.8
-  },
-  {
-   "t": 1795133970,
-   "temperatura": 63,
-   "potencia": 17.4,
-   "pl1": 8
-  },
-  {
-   "t": 1795133980,
-   "temperatura": 64,
-   "potencia": 14.4,
-   "pl1": 13
-  },
-  {
-   "t": 1795133990,
-   "temperatura": 62,
-   "potencia": 14.6,
-   "pl1": 11
-  },
-  {
-   "t": 1795134000,
-   "temperatura": 61,
-   "potencia": 15.6,
-   "pl1": 14.1
-  },
-  {
-   "t": 1795134010,
-   "temperatura": 63,
-   "potencia": 16.8,
-   "pl1": 18.8
-  },
-  {
-   "t": 1795134020,
-   "temperatura": 65,
-   "potencia": 15.7,
-   "pl1": 16.1
-  },
-  {
-   "t": 1795134030,
-   "temperatura": 66,
-   "potencia": 14.2,
-   "pl1": 21.1
-  },
-  {
-   "t": 1795134040,
-   "temperatura": 64,
-   "potencia": 13.5,
-   "pl1": 20.1
-  },
-  {
-   "t": 1795134050,
-   "temperatura": 63,
-   "potencia": 14.6,
-   "pl1": 18.1
-  },
-  {
-   "t": 1795134060,
-   "temperatura": 65,
-   "potencia": 21.2,
-   "pl1": 16.1
-  },
-  {
-   "t": 1795134070,
-   "temperatura": 67,
-   "potencia": 17.1,
-   "pl1": 19.1
-  },
-  {
-   "t": 1795134080,
-   "temperatura": 66,
-   "potencia": 17.7,
-   "pl1": 19.1
-  },
-  {
-   "t": 1795134090,
-   "temperatura": 64,
-   "potencia": 20.6,
-   "pl1": 18.1
-  },
-  {
-   "t": 1795134100,
-   "temperatura": 62,
-   "potencia": 14.4,
-   "pl1": 15.1
-  },
-  {
-   "t": 1795134110,
-   "temperatura": 63,
-   "potencia": 19.9,
-   "pl1": 18.1
-  },
-  {
-   "t": 1795134120,
-   "temperatura": 64,
-   "potencia": 18.2,
-   "pl1": 14.1
-  },
-  {
-   "t": 1795134130,
-   "temperatura": 66,
-   "potencia": 13.1,
-   "pl1": 15.6
-  },
-  {
-   "t": 1795134140,
-   "temperatura": 65,
-   "potencia": 13.4,
-   "pl1": 15.2
-  },
-  {
-   "t": 1795134150,
-   "temperatura": 63,
-   "potencia": 15.1,
-   "pl1": 16.9
-  },
-  {
-   "t": 1795134160,
-   "temperatura": 62,
-   "potencia": 20.6,
-   "pl1": 19.9
-  },
-  {
-   "t": 1795134170,
-   "temperatura": 64,
-   "potencia": 14,
-   "pl1": 15
-  },
-  {
-   "t": 1795134180,
-   "temperatura": 65,
-   "potencia": 20.1,
-   "pl1": 17
-  },
-  {
-   "t": 1795134190,
-   "temperatura": 66,
-   "potencia": 13.7,
-   "pl1": 15.1
-  },
-  {
-   "t": 1795134200,
-   "temperatura": 64,
-   "potencia": 15.9,
-   "pl1": 15.8
-  },
-  {
-   "t": 1795134210,
-   "temperatura": 63,
-   "potencia": 17.4,
-   "pl1": 8
-  },
-  {
-   "t": 1795134220,
-   "temperatura": 64,
-   "potencia": 14.4,
-   "pl1": 13
-  },
-  {
-   "t": 1795134230,
-   "temperatura": 65,
-   "potencia": 14.6,
-   "pl1": 11
-  },
-  {
-   "t": 1795134240,
-   "temperatura": 64,
-   "potencia": 15.6,
-   "pl1": 14.1
-  }
- ],
- "freio_por_hora": [
-  {
-   "hora": 10,
-   "minutos": 0
-  },
-  {
-   "hora": 11,
-   "minutos": 0
-  },
-  {
-   "hora": 12,
-   "minutos": 2
-  },
-  {
-   "hora": 13,
-   "minutos": 5
-  },
-  {
-   "hora": 14,
-   "minutos": 1
-  },
-  {
-   "hora": 15,
-   "minutos": 0
-  },
-  {
-   "hora": 16,
-   "minutos": 0
-  },
-  {
-   "hora": 17,
-   "minutos": 3
-  },
-  {
-   "hora": 18,
-   "minutos": 12
-  },
-  {
-   "hora": 19,
-   "minutos": 18
-  },
-  {
-   "hora": 20,
-   "minutos": 9
-  },
-  {
-   "hora": 21,
-   "minutos": 6
-  }
- ],
- "processos": [
-  {
-   "nome": "qemu-system-x86",
-   "fatia": 0.38,
-   "nota": 0.3,
-   "suspeito": false
-  },
-  {
-   "nome": "rustc",
-   "fatia": 0.3,
-   "nota": 0.596,
-   "suspeito": false
-  },
-  {
-   "nome": "cargo",
-   "fatia": 0.04,
-   "nota": null,
-   "suspeito": false
-  },
-  {
-   "nome": "gnome-shell",
-   "fatia": 0.02,
-   "nota": 0.656,
-   "suspeito": false
-  }
- ],
- "historico": [
-  {
-   "nome": "depmod",
-   "nota": 0.997,
-   "pico": 4.44,
-   "observacoes": 15,
-   "visto_em": 1795128973,
-   "suspeito": false
-  },
-  {
-   "nome": "dnf",
-   "nota": 0.996,
-   "pico": 4.37,
-   "observacoes": 96,
-   "visto_em": 1795132183,
-   "suspeito": false
-  },
-  {
-   "nome": "servidor-do-cic",
-   "nota": 0.942,
-   "pico": 14.3,
-   "observacoes": 141,
-   "visto_em": 1795132154,
-   "suspeito": false
-  },
-  {
-   "nome": "zstd",
-   "nota": 0.817,
-   "pico": 3.91,
-   "observacoes": 1,
-   "visto_em": 1795128877,
-   "suspeito": false
-  },
-  {
-   "nome": "ui_gpui-41a1bb0",
-   "nota": 0.76,
-   "pico": 14.3,
-   "observacoes": 50,
-   "visto_em": 1795130360,
-   "suspeito": false
-  },
-  {
-   "nome": "gnome-shell",
-   "nota": 0.656,
-   "pico": 3.68,
-   "observacoes": 4,
-   "visto_em": 1795128981,
-   "suspeito": false
-  },
-  {
-   "nome": "rustc",
-   "nota": 0.596,
-   "pico": 4.24,
-   "observacoes": 1314,
-   "visto_em": 1795132179,
-   "suspeito": false
-  },
-  {
-   "nome": "dnf5",
-   "nota": 0.531,
-   "pico": 3.66,
-   "observacoes": 83,
-   "visto_em": 1795128815,
-   "suspeito": false
-  },
-  {
-   "nome": "k3s-server",
-   "nota": 0.479,
-   "pico": 3.68,
-   "observacoes": 8,
-   "visto_em": 1795132587,
-   "suspeito": false
-  },
-  {
-   "nome": "semodule",
-   "nota": 0.448,
-   "pico": 3.05,
-   "observacoes": 30,
-   "visto_em": 1795128845,
-   "suspeito": false
-  }
- ],
- "suspeito_c_s": 1.0,
- "sensores": [
-  {
-   "nome": "TC0P",
-   "celsius": 58
-  },
-  {
-   "nome": "TG0P",
-   "celsius": 52
-  },
-  {
-   "nome": "Tm0P",
-   "celsius": 49
-  },
-  {
-   "nome": "TM0P",
-   "celsius": 46
-  },
-  {
-   "nome": "Ta0P",
-   "celsius": 41
-  },
-  {
-   "nome": "TB0T",
-   "celsius": 32
-  }
- ],
- "feitos": [
-  {
-   "em_ms": 1795132380000,
-   "texto": "🎛️ ajuste: alvo_c = 65.0",
-   "tags": [
-    "termostato",
-    "ajuste"
-   ]
-  },
-  {
-   "em_ms": 1795132140000,
-   "texto": "🔥 88 °C agora, 98 °C previstos em 10 s (+1.0 °C/s): freio de calor acionado, PL1 em 25.0 W",
-   "tags": [
-    "termostato",
-    "freio",
-    "acionado"
-   ]
-  }
- ],
- "decisao": {
-  "vence": "alvo",
-  "curva_w": 38.0,
-  "alvo_w": 18.2,
-  "prevista_processos": null,
-  "freio_comeca_c": 80,
-  "freio_acima_c": 92,
-  "suspeitos_ativos": []
- },
- "ajustes": {
-  "alvo_c": 65.0,
-  "maos_modo": "observar",
-  "pl1_normal_w": 38.0,
-  "em_vigor": [
-   {
-    "chave": "alvo_c",
-    "valor": "65.0"
-   }
+  "versao": "0.8.0",
+  "maquina": "fedora",
+  "agora_unix": 1795134240,
+  "agora": {
+    "temperatura": 64.0,
+    "prevista": 68.0,
+    "tendencia": 0.4,
+    "pl1": 18.2,
+    "pl1_alvo": 18.2,
+    "pl1_normal": 38.0,
+    "potencia": 15.7,
+    "frequencia_mhz": 2195,
+    "tcc_corte": 92,
+    "psi_memoria": 0.0,
+    "freio_acionado": true,
+    "freio_intensidade": 1.0,
+    "segurados": 0
+  },
+  "ventoinhas": [
+    {
+      "numero": "1",
+      "rpm": 6156,
+      "maximo": 6200
+    },
+    {
+      "numero": "2",
+      "rpm": 5698,
+      "maximo": 6200
+    }
   ],
-  "pode_ajustar": true
- }
+  "serie": [
+    {
+      "t": 1795133650,
+      "temperatura": 58,
+      "potencia": 13.1,
+      "pl1": 15.6
+    },
+    {
+      "t": 1795133660,
+      "temperatura": 59,
+      "potencia": 13.4,
+      "pl1": 15.2
+    },
+    {
+      "t": 1795133670,
+      "temperatura": 61,
+      "potencia": 15.1,
+      "pl1": 16.9
+    },
+    {
+      "t": 1795133680,
+      "temperatura": 60,
+      "potencia": 20.6,
+      "pl1": 19.9
+    },
+    {
+      "t": 1795133690,
+      "temperatura": 62,
+      "potencia": 14,
+      "pl1": 15
+    },
+    {
+      "t": 1795133700,
+      "temperatura": 64,
+      "potencia": 20.1,
+      "pl1": 17
+    },
+    {
+      "t": 1795133710,
+      "temperatura": 63,
+      "potencia": 13.7,
+      "pl1": 15.1
+    },
+    {
+      "t": 1795133720,
+      "temperatura": 61,
+      "potencia": 15.9,
+      "pl1": 15.8
+    },
+    {
+      "t": 1795133730,
+      "temperatura": 60,
+      "potencia": 17.4,
+      "pl1": 8
+    },
+    {
+      "t": 1795133740,
+      "temperatura": 59,
+      "potencia": 14.4,
+      "pl1": 13
+    },
+    {
+      "t": 1795133750,
+      "temperatura": 61,
+      "potencia": 14.6,
+      "pl1": 11
+    },
+    {
+      "t": 1795133760,
+      "temperatura": 63,
+      "potencia": 15.6,
+      "pl1": 14.1
+    },
+    {
+      "t": 1795133770,
+      "temperatura": 66,
+      "potencia": 16.8,
+      "pl1": 18.8
+    },
+    {
+      "t": 1795133780,
+      "temperatura": 66,
+      "potencia": 15.7,
+      "pl1": 16.1
+    },
+    {
+      "t": 1795133790,
+      "temperatura": 64,
+      "potencia": 14.2,
+      "pl1": 21.1
+    },
+    {
+      "t": 1795133800,
+      "temperatura": 65,
+      "potencia": 13.5,
+      "pl1": 20.1
+    },
+    {
+      "t": 1795133810,
+      "temperatura": 67,
+      "potencia": 14.6,
+      "pl1": 18.1
+    },
+    {
+      "t": 1795133820,
+      "temperatura": 63,
+      "potencia": 21.2,
+      "pl1": 16.1
+    },
+    {
+      "t": 1795133830,
+      "temperatura": 69,
+      "potencia": 17.1,
+      "pl1": 19.1
+    },
+    {
+      "t": 1795133840,
+      "temperatura": 63,
+      "potencia": 17.7,
+      "pl1": 19.1
+    },
+    {
+      "t": 1795133850,
+      "temperatura": 64,
+      "potencia": 20.6,
+      "pl1": 18.1
+    },
+    {
+      "t": 1795133860,
+      "temperatura": 60,
+      "potencia": 14.4,
+      "pl1": 15.1
+    },
+    {
+      "t": 1795133870,
+      "temperatura": 61,
+      "potencia": 19.9,
+      "pl1": 18.1
+    },
+    {
+      "t": 1795133880,
+      "temperatura": 62,
+      "potencia": 18.2,
+      "pl1": 14.1
+    },
+    {
+      "t": 1795133890,
+      "temperatura": 60,
+      "potencia": 13.1,
+      "pl1": 15.6
+    },
+    {
+      "t": 1795133900,
+      "temperatura": 59,
+      "potencia": 13.4,
+      "pl1": 15.2
+    },
+    {
+      "t": 1795133910,
+      "temperatura": 61,
+      "potencia": 15.1,
+      "pl1": 16.9
+    },
+    {
+      "t": 1795133920,
+      "temperatura": 63,
+      "potencia": 20.6,
+      "pl1": 19.9
+    },
+    {
+      "t": 1795133930,
+      "temperatura": 65,
+      "potencia": 14,
+      "pl1": 15
+    },
+    {
+      "t": 1795133940,
+      "temperatura": 64,
+      "potencia": 20.1,
+      "pl1": 17
+    },
+    {
+      "t": 1795133950,
+      "temperatura": 66,
+      "potencia": 13.7,
+      "pl1": 15.1
+    },
+    {
+      "t": 1795133960,
+      "temperatura": 65,
+      "potencia": 15.9,
+      "pl1": 15.8
+    },
+    {
+      "t": 1795133970,
+      "temperatura": 63,
+      "potencia": 17.4,
+      "pl1": 8
+    },
+    {
+      "t": 1795133980,
+      "temperatura": 64,
+      "potencia": 14.4,
+      "pl1": 13
+    },
+    {
+      "t": 1795133990,
+      "temperatura": 62,
+      "potencia": 14.6,
+      "pl1": 11
+    },
+    {
+      "t": 1795134000,
+      "temperatura": 61,
+      "potencia": 15.6,
+      "pl1": 14.1
+    },
+    {
+      "t": 1795134010,
+      "temperatura": 63,
+      "potencia": 16.8,
+      "pl1": 18.8
+    },
+    {
+      "t": 1795134020,
+      "temperatura": 65,
+      "potencia": 15.7,
+      "pl1": 16.1
+    },
+    {
+      "t": 1795134030,
+      "temperatura": 66,
+      "potencia": 14.2,
+      "pl1": 21.1
+    },
+    {
+      "t": 1795134040,
+      "temperatura": 64,
+      "potencia": 13.5,
+      "pl1": 20.1
+    },
+    {
+      "t": 1795134050,
+      "temperatura": 63,
+      "potencia": 14.6,
+      "pl1": 18.1
+    },
+    {
+      "t": 1795134060,
+      "temperatura": 65,
+      "potencia": 21.2,
+      "pl1": 16.1
+    },
+    {
+      "t": 1795134070,
+      "temperatura": 67,
+      "potencia": 17.1,
+      "pl1": 19.1
+    },
+    {
+      "t": 1795134080,
+      "temperatura": 66,
+      "potencia": 17.7,
+      "pl1": 19.1
+    },
+    {
+      "t": 1795134090,
+      "temperatura": 64,
+      "potencia": 20.6,
+      "pl1": 18.1
+    },
+    {
+      "t": 1795134100,
+      "temperatura": 62,
+      "potencia": 14.4,
+      "pl1": 15.1
+    },
+    {
+      "t": 1795134110,
+      "temperatura": 63,
+      "potencia": 19.9,
+      "pl1": 18.1
+    },
+    {
+      "t": 1795134120,
+      "temperatura": 64,
+      "potencia": 18.2,
+      "pl1": 14.1
+    },
+    {
+      "t": 1795134130,
+      "temperatura": 66,
+      "potencia": 13.1,
+      "pl1": 15.6
+    },
+    {
+      "t": 1795134140,
+      "temperatura": 65,
+      "potencia": 13.4,
+      "pl1": 15.2
+    },
+    {
+      "t": 1795134150,
+      "temperatura": 63,
+      "potencia": 15.1,
+      "pl1": 16.9
+    },
+    {
+      "t": 1795134160,
+      "temperatura": 62,
+      "potencia": 20.6,
+      "pl1": 19.9
+    },
+    {
+      "t": 1795134170,
+      "temperatura": 64,
+      "potencia": 14,
+      "pl1": 15
+    },
+    {
+      "t": 1795134180,
+      "temperatura": 65,
+      "potencia": 20.1,
+      "pl1": 17
+    },
+    {
+      "t": 1795134190,
+      "temperatura": 66,
+      "potencia": 13.7,
+      "pl1": 15.1
+    },
+    {
+      "t": 1795134200,
+      "temperatura": 64,
+      "potencia": 15.9,
+      "pl1": 15.8
+    },
+    {
+      "t": 1795134210,
+      "temperatura": 63,
+      "potencia": 17.4,
+      "pl1": 8
+    },
+    {
+      "t": 1795134220,
+      "temperatura": 64,
+      "potencia": 14.4,
+      "pl1": 13
+    },
+    {
+      "t": 1795134230,
+      "temperatura": 65,
+      "potencia": 14.6,
+      "pl1": 11
+    },
+    {
+      "t": 1795134240,
+      "temperatura": 64,
+      "potencia": 15.6,
+      "pl1": 14.1
+    }
+  ],
+  "freio_por_hora": [
+    {
+      "hora": 10,
+      "minutos": 0
+    },
+    {
+      "hora": 11,
+      "minutos": 0
+    },
+    {
+      "hora": 12,
+      "minutos": 2
+    },
+    {
+      "hora": 13,
+      "minutos": 5
+    },
+    {
+      "hora": 14,
+      "minutos": 1
+    },
+    {
+      "hora": 15,
+      "minutos": 0
+    },
+    {
+      "hora": 16,
+      "minutos": 0
+    },
+    {
+      "hora": 17,
+      "minutos": 3
+    },
+    {
+      "hora": 18,
+      "minutos": 12
+    },
+    {
+      "hora": 19,
+      "minutos": 18
+    },
+    {
+      "hora": 20,
+      "minutos": 9
+    },
+    {
+      "hora": 21,
+      "minutos": 6
+    }
+  ],
+  "processos": [
+    {
+      "nome": "qemu-system-x86",
+      "fatia": 0.38,
+      "nota": 0.3,
+      "suspeito": false
+    },
+    {
+      "nome": "rustc",
+      "fatia": 0.3,
+      "nota": 0.596,
+      "suspeito": false
+    },
+    {
+      "nome": "cargo",
+      "fatia": 0.04,
+      "nota": null,
+      "suspeito": false
+    },
+    {
+      "nome": "gnome-shell",
+      "fatia": 0.02,
+      "nota": 0.656,
+      "suspeito": false
+    }
+  ],
+  "historico": [
+    {
+      "nome": "depmod",
+      "nota": 0.997,
+      "pico": 4.44,
+      "observacoes": 15,
+      "visto_em": 1795128973,
+      "suspeito": false
+    },
+    {
+      "nome": "dnf",
+      "nota": 0.996,
+      "pico": 4.37,
+      "observacoes": 96,
+      "visto_em": 1795132183,
+      "suspeito": false
+    },
+    {
+      "nome": "servidor-do-cic",
+      "nota": 0.942,
+      "pico": 14.3,
+      "observacoes": 141,
+      "visto_em": 1795132154,
+      "suspeito": false
+    },
+    {
+      "nome": "zstd",
+      "nota": 0.817,
+      "pico": 3.91,
+      "observacoes": 1,
+      "visto_em": 1795128877,
+      "suspeito": false
+    },
+    {
+      "nome": "ui_gpui-41a1bb0",
+      "nota": 0.76,
+      "pico": 14.3,
+      "observacoes": 50,
+      "visto_em": 1795130360,
+      "suspeito": false
+    },
+    {
+      "nome": "gnome-shell",
+      "nota": 0.656,
+      "pico": 3.68,
+      "observacoes": 4,
+      "visto_em": 1795128981,
+      "suspeito": false
+    },
+    {
+      "nome": "rustc",
+      "nota": 0.596,
+      "pico": 4.24,
+      "observacoes": 1314,
+      "visto_em": 1795132179,
+      "suspeito": false
+    },
+    {
+      "nome": "dnf5",
+      "nota": 0.531,
+      "pico": 3.66,
+      "observacoes": 83,
+      "visto_em": 1795128815,
+      "suspeito": false
+    },
+    {
+      "nome": "k3s-server",
+      "nota": 0.479,
+      "pico": 3.68,
+      "observacoes": 8,
+      "visto_em": 1795132587,
+      "suspeito": false
+    },
+    {
+      "nome": "semodule",
+      "nota": 0.448,
+      "pico": 3.05,
+      "observacoes": 30,
+      "visto_em": 1795128845,
+      "suspeito": false
+    }
+  ],
+  "suspeito_c_s": 1.0,
+  "sensores": [
+    {
+      "nome": "TC0P",
+      "celsius": 58
+    },
+    {
+      "nome": "TG0P",
+      "celsius": 52
+    },
+    {
+      "nome": "Tm0P",
+      "celsius": 49
+    },
+    {
+      "nome": "TM0P",
+      "celsius": 46
+    },
+    {
+      "nome": "Ta0P",
+      "celsius": 41
+    },
+    {
+      "nome": "TB0T",
+      "celsius": 32
+    }
+  ],
+  "feitos": [
+    {
+      "em_ms": 1795132380000,
+      "texto": "🎛️ ajuste: alvo_c = 65.0",
+      "tags": [
+        "termostato",
+        "ajuste"
+      ]
+    },
+    {
+      "em_ms": 1795132140000,
+      "texto": "🔥 88 °C agora, 98 °C previstos em 10 s (+1.0 °C/s): freio de calor acionado, PL1 em 25.0 W",
+      "tags": [
+        "termostato",
+        "freio",
+        "acionado"
+      ]
+    }
+  ],
+  "decisao": {
+    "vence": "alvo",
+    "curva_w": 38.0,
+    "alvo_w": 18.2,
+    "prevista_processos": null,
+    "freio_comeca_c": 80,
+    "freio_acima_c": 92,
+    "suspeitos_ativos": []
+  },
+  "ajustes": {
+    "alvo_c": 65.0,
+    "maos_modo": "observar",
+    "pl1_normal_w": 38.0,
+    "em_vigor": [
+      {
+        "chave": "alvo_c",
+        "valor": "65.0"
+      }
+    ],
+    "pode_ajustar": true
+  },
+  "nucleos": [
+    {
+      "nucleo": 0,
+      "celsius": 82.0,
+      "estrangulamentos": 765
+    },
+    {
+      "nucleo": 1,
+      "celsius": 83.0,
+      "estrangulamentos": 163
+    },
+    {
+      "nucleo": 2,
+      "celsius": 85.0,
+      "estrangulamentos": 9719
+    },
+    {
+      "nucleo": 3,
+      "celsius": 80.0,
+      "estrangulamentos": 0
+    }
+  ],
+  "motivos": [
+    {
+      "nome": "prochot",
+      "agora": false,
+      "desde_o_boot": true,
+      "leituras": 1
+    },
+    {
+      "nome": "termico",
+      "agora": false,
+      "desde_o_boot": true,
+      "leituras": 40
+    },
+    {
+      "nome": "utilizacao_autonoma",
+      "agora": false,
+      "desde_o_boot": true,
+      "leituras": 11
+    },
+    {
+      "nome": "vr",
+      "agora": false,
+      "desde_o_boot": false,
+      "leituras": 0
+    },
+    {
+      "nome": "corrente",
+      "agora": false,
+      "desde_o_boot": true,
+      "leituras": 3
+    },
+    {
+      "nome": "pl1",
+      "agora": true,
+      "desde_o_boot": true,
+      "leituras": 20
+    },
+    {
+      "nome": "pl2",
+      "agora": false,
+      "desde_o_boot": true,
+      "leituras": 5
+    },
+    {
+      "nome": "turbo_maximo",
+      "agora": true,
+      "desde_o_boot": true,
+      "leituras": 20
+    },
+    {
+      "nome": "atenuacao_turbo",
+      "agora": false,
+      "desde_o_boot": true,
+      "leituras": 10
+    }
+  ],
+  "prochot": {
+    "eventos": 1,
+    "segundos": 2.0
+  },
+  "bateria": {
+    "carregador": true,
+    "estado": "Discharging",
+    "amperes": -1.21,
+    "volts": 12.63,
+    "carga_pct": 90.0,
+    "descarga_s": 1260.0,
+    "descarga_wh": 0.85,
+    "descarga_episodios": 42
+  }
 }

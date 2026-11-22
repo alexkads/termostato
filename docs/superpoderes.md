@@ -13,7 +13,9 @@ Da 0.5 em diante, o termostato não olha só a temperatura. Ele vê os processos
 | 💾 Memória | pressão (PSI), memória disponível, swap | `memory.high` no cgroup de quem mais ocupa |
 | 🐳 Contêineres | o nome de cada um, pela API do Docker | `NanoCpus` pela API do Docker |
 | ⚡ Kernel | gatilho de pressão, estrangulamento, domínios do RAPL | o laço acorda na hora |
-| 🛡️ Chip | o registro de temperatura (`MSR 0x1A2`) | TCC offset: o chip se freia sozinho a 92 °C |
+| 🛡️ Chip | o registro de temperatura (`MSR 0x1A2`) | TCC offset: gravado para o chip se frear a 92 °C, mas **este Haswell não o respeita** (vai a 100 °C) |
+| ⛔ PROCHOT e 🔋 bateria | o log do `MSR 0x690`, limpo a cada leitura, e a bateria (corrente, tensão, carregador) | cada freio de fora e cada descarga no carregador vira evento, contador e Wh |
+| 📼 Caixa-preta | núcleos, motivos do freio (`MSR 0x690`), bateria, swap, OOM e memória por processo | grava tudo a cada 2 s e explica a queda no boot seguinte |
 | 📣 Grafana | — | anotação a cada ação, contador por tipo, e-mail quando age |
 
 ## O guardião ([`guardiao.rs`](../src/guardiao.rs))
@@ -105,12 +107,14 @@ Testado na fedora com 6 GB de memória pedidos em 3 s: `⚡ o kernel avisou: a m
 
 ## O chip: o TCC offset ([`tcc.rs`](../src/tcc.rs))
 
-O `MSR 0x1A2` (`MSR_TEMPERATURE_TARGET`) guarda o TjMax (100 °C) e o **TCC offset**: o circuito térmico da própria CPU passa a reduzir o clock `offset` graus antes do TjMax. Com 8, **o chip se freia sozinho a 92 °C**, sem software no meio e em microssegundos. Vale mesmo se o termostato travar ou o sistema sufocar, como em 19/11/2026.
+O `MSR 0x1A2` (`MSR_TEMPERATURE_TARGET`) guarda o TjMax (100 °C) e o **TCC offset**: o circuito térmico da própria CPU passa a reduzir o clock `offset` graus antes do TjMax. Com 8, **o chip deveria se frear sozinho a 92 °C**, sem software no meio e em microssegundos.
+
+> **Não segura neste chip.** Em 22/11/2026, com o offset gravado e conferido nas 8 CPUs, o `termostato estresse` levou o chip a 99–100 °C. O Haswell aceita e devolve o offset, mas continua se freando só no TjMax. Desde então, quando o chip passa do corte, o termostato avisa (🛡️) e a métrica e o painel passam a mostrar o corte de verdade, 100 °C. Quem protege o chip é a curva de freio e o TjMax.
 
 | Camada | Age em | Depende de software? |
 |---|---|---|
 | Curva de freio com previsão | 80–92 °C, antes do pico | sim (termostato) |
-| **TCC offset** | **92 °C, no chip** | **não**, depois de gravado |
+| **TCC offset** | **92 °C, no chip** (não respeitado neste Haswell) | **não**, depois de gravado |
 | Corte de fábrica | 100 °C | não |
 
 **Por que pelo driver `msr`, e não pelo driver de TCC.** O kernel tem um driver próprio para isso (`intel_tcc_cooling`), mas ele não atende o Haswell: o modelo não está na lista dele (`modprobe` responde `No such device`). Forçá-lo exigiria recompilar o módulo com o Haswell na lista, e o módulo quebraria a cada atualização de kernel do Fedora. O driver genérico `msr` do kernel faz a mesma gravação, e as conferências que o driver de TCC faria ficam com o termostato:

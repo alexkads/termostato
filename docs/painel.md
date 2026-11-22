@@ -13,7 +13,10 @@ O painel foi desenhado com o design system do RCB (o RavenRS, gerado pelo RavenC
 | Temperatura | Os últimos 10 min, com o alvo (tracejado) e o corte do chip (TCC) | `serie`, `ajustes.alvo_c`, `agora.tcc_corte` |
 | Ajustes | Alvo (sem, 55, 60, 65, 70 °C), mãos (observar, agir, desligado), limite normal (25–45 W) e voltar ao padrão | `POST /api/ajustes` |
 | Como ele decidiu o limite | O fluxo de cada volta (FlowCanvas só leitura): leituras, regras e ações; o caminho que venceu fica em execução, o que não contou fica desligado | `decisao` |
-| Potência e limite, Ventoinhas, Quem gasta a CPU | Linha, radial e rosca | `serie`, `ventoinhas`, `processos` |
+| Potência e limite, Ventoinhas, Quem gasta a CPU | Linha, radial (a rotação pela curva) e rosca | `serie`, `ventoinhas`, `processos` |
+| Cada núcleo | Uma barra por núcleo físico (em alerta a partir de 90 °C), com os estrangulamentos dele, e a diferença entre o mais quente e o mais frio (desiguais a partir de 8 °C) | `nucleos` |
+| Por que o chip freia | Os motivos do `MSR 0x690` (agora, desde o boot, leituras) e o resumo do PROCHOT (vezes e segundos com a CPU freada por fora) | `motivos`, `prochot` |
+| Bateria e carregador | O carregador ligado ou não, a corrente com sinal e a tensão, a carga e o que a bateria já deu com o carregador ligado (Wh, minutos, vezes) | `bateria` |
 | Freando por hora | Minutos com o PL1 abaixo do normal, nas últimas 12 h | `freio_por_hora` |
 | Sensores do Mac | Os seis mais quentes do `applesmc`, com o nome em português quando o código é conhecido | `sensores` |
 | Processos e O que ele fez | Quem gasta a CPU agora, com a nota de calor, e os últimos avisos do journal | `processos`, `feitos` |

@@ -178,7 +178,7 @@ pub fn estado_json(
             "pl1_normal": cfg.pl1_normal_w,
             "potencia": r.potencia_w,
             "frequencia_mhz": r.frequencia_mhz,
-            "tcc_corte": r.tjmax_c.zip(r.tcc_offset_c).map(|(t, o)| t.saturating_sub(o)),
+            "tcc_corte": r.corte_c(),
             "psi_memoria": r.pressao.as_ref().map(|p| p.memoria_some_pct),
             "freio_acionado": r.freio_acionado,
             "freio_intensidade": r.freio_intensidade,
@@ -197,6 +197,28 @@ pub fn estado_json(
         })).collect::<Vec<_>>(),
         "suspeito_c_s": cfg.processos.suspeito_c_s,
         "sensores": sensores.iter().map(|(n, c)| json!({"nome": n, "celsius": c})).collect::<Vec<_>>(),
+        "nucleos": r.nucleos_c.iter().map(|(n, c)| json!({
+            "nucleo": n,
+            "celsius": c,
+            "estrangulamentos": r.nucleos_estrangulamento.iter().find(|(i, _)| i == n).map(|(_, v)| v),
+        })).collect::<Vec<_>>(),
+        "motivos": r.motivos.as_ref().map_or_else(Vec::new, |m| m.lista.iter().map(|mo| json!({
+            "nome": mo.nome,
+            "agora": mo.agora,
+            "desde_o_boot": mo.desde_o_boot,
+            "leituras": r.energia.motivo_leituras.iter().find(|(n, _)| *n == mo.nome).map_or(0, |(_, v)| *v),
+        })).collect::<Vec<_>>()),
+        "prochot": {"eventos": r.energia.prochot_eventos, "segundos": r.energia.prochot_s},
+        "bateria": r.bateria.as_ref().map(|b| json!({
+            "carregador": b.carregador_ligado,
+            "estado": b.estado,
+            "amperes": b.amperes,
+            "volts": b.volts,
+            "carga_pct": b.carga_pct,
+            "descarga_s": r.energia.descarga_s,
+            "descarga_wh": r.energia.descarga_wh,
+            "descarga_episodios": r.energia.descarga_episodios,
+        })),
         "feitos": avisos::diario(12).iter().map(|a| json!({"em_ms": a.em_ms as u64, "texto": a.texto, "tags": a.tags})).collect::<Vec<_>>(),
         "decisao": {
             "vence": quem_vence(r, cfg),
@@ -556,6 +578,24 @@ mod testes {
                 pelo_alvo: true,
                 ..Default::default()
             },
+            nucleos_c: vec![(0, 97.0), (1, 92.0)],
+            nucleos_estrangulamento: vec![(0, 765)],
+            motivos: Some(crate::vigia::Motivos::de(1 << 10, 1 << 16)),
+            bateria: Some(crate::vigia::Bateria {
+                carregador_ligado: Some(true),
+                estado: "Discharging".into(),
+                amperes: Some(-1.2),
+                carga_pct: Some(90.0),
+                volts: Some(12.6),
+            }),
+            energia: crate::energia::EnergiaLida {
+                motivo_leituras: vec![("pl1", 20)],
+                prochot_eventos: 1,
+                prochot_s: 2.0,
+                descarga_s: 21.0,
+                descarga_wh: 0.05,
+                descarga_episodios: 2,
+            },
             ..Retrato::default()
         };
         let cfg = Config {
@@ -578,5 +618,26 @@ mod testes {
         assert_eq!(v["ajustes"]["pode_ajustar"], false);
         assert_eq!(v["freio_por_hora"].as_array().unwrap().len(), 12);
         assert_eq!(hora_local(10, -10_800), 7);
+        assert_eq!(v["nucleos"][0]["celsius"], 97.0);
+        assert_eq!(v["nucleos"][0]["estrangulamentos"], 765);
+        assert!(v["nucleos"][1]["estrangulamentos"].is_null());
+        let pl1 = v["motivos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["nome"] == "pl1")
+            .unwrap();
+        assert_eq!(pl1["agora"], true);
+        assert_eq!(pl1["leituras"], 20);
+        let prochot = v["motivos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["nome"] == "prochot")
+            .unwrap();
+        assert_eq!(prochot["desde_o_boot"], true);
+        assert_eq!(v["prochot"]["eventos"], 1);
+        assert_eq!(v["bateria"]["amperes"], -1.2);
+        assert_eq!(v["bateria"]["descarga_episodios"], 2);
     }
 }

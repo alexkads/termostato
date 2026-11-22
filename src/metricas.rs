@@ -6,7 +6,9 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+use crate::energia::EnergiaLida;
 use crate::pressao::Pressao;
+use crate::vigia::{Bateria, MemoriaDe, Motivos};
 
 /// Um dos processos que mais gastam CPU agora.
 #[derive(Debug, Clone, Default)]
@@ -93,6 +95,25 @@ pub struct Retrato {
     /// O histórico negativo inteiro, com o que o painel mostra.
     pub fichas: Vec<FichaLida>,
     pub decisao: DecisaoLida,
+    /// A temperatura de cada núcleo físico: (núcleo, °C).
+    pub nucleos_c: Vec<(u32, f64)>,
+    /// Estrangulamentos de cada núcleo desde o boot: (núcleo, vezes).
+    pub nucleos_estrangulamento: Vec<(u32, u64)>,
+    /// Tempo total com o pacote estrangulado desde o boot.
+    pub estrangulado_s: Option<f64>,
+    /// Por que o chip está abaixo da frequência pedida (MSR 0x690).
+    pub motivos: Option<Motivos>,
+    pub bateria: Option<Bateria>,
+    /// Swap em MB/s: (entra, sai).
+    pub swap_mb_s: Option<(f64, f64)>,
+    /// Mortes do OOM killer desde o boot.
+    pub oom_mortes: Option<u64>,
+    /// Quem mais segura memória (RAM + swap), por nome.
+    pub memoria_maiores: Vec<MemoriaDe>,
+    /// O chip já passou do corte do TCC: o offset não está sendo respeitado.
+    pub tcc_ignorado: bool,
+    /// Os acumulados de PROCHOT e da bateria no carregador (`energia.rs`).
+    pub energia: EnergiaLida,
 }
 
 /// Escapa um valor de rótulo do Prometheus.
@@ -116,19 +137,270 @@ impl Retrato {
         *self.acoes.entry(acao.to_string()).or_default() += 1;
     }
 
+    /// Onde o chip se freia de verdade: o TjMax menos o offset, ou o TjMax se
+    /// ele já passou do corte (em 22/11/2026, o Haswell da fedora ia a 100 °C
+    /// com o offset de 8 °C gravado).
+    pub fn corte_c(&self) -> Option<u8> {
+        let (o, tj) = (self.tcc_offset_c?, self.tjmax_c?);
+        Some(if self.tcc_ignorado {
+            tj
+        } else {
+            tj.saturating_sub(o)
+        })
+    }
+
+    // Uma lista corrida de métricas, como a de `em_texto`.
+    #[allow(clippy::too_many_lines)]
+    fn do_vigia(&self, s: &mut String) {
+        if !self.nucleos_c.is_empty() {
+            metrica(
+                s,
+                "termostato_nucleo_celsius",
+                "gauge",
+                "Temperatura de cada núcleo físico (coretemp).",
+            );
+            for (n, c) in &self.nucleos_c {
+                valor(
+                    s,
+                    "termostato_nucleo_celsius",
+                    &format!("{{nucleo=\"{n}\"}}"),
+                    *c,
+                );
+            }
+        }
+        if !self.nucleos_estrangulamento.is_empty() {
+            metrica(
+                s,
+                "termostato_nucleo_estrangulamento_total",
+                "counter",
+                "Estrangulamentos térmicos de cada núcleo físico desde o boot.",
+            );
+            for (n, v) in &self.nucleos_estrangulamento {
+                valor(
+                    s,
+                    "termostato_nucleo_estrangulamento_total",
+                    &format!("{{nucleo=\"{n}\"}}"),
+                    *v as f64,
+                );
+            }
+        }
+        if let Some(t) = self.estrangulado_s {
+            metrica(
+                s,
+                "termostato_estrangulado_segundos_total",
+                "counter",
+                "Tempo com o pacote estrangulado desde o boot.",
+            );
+            valor(s, "termostato_estrangulado_segundos_total", "", t);
+        }
+        if let Some(m) = &self.motivos {
+            metrica(
+                s,
+                "termostato_freio_motivo",
+                "gauge",
+                "Por que o chip está abaixo da frequência pedida (MSR 0x690): 1 se o motivo vale agora ou valeu desde o boot. prochot = o SMC ou o carregador freando por fora.",
+            );
+            for mo in &m.lista {
+                for (quando, v) in [("agora", mo.agora), ("desde_o_boot", mo.desde_o_boot)] {
+                    valor(
+                        s,
+                        "termostato_freio_motivo",
+                        &format!("{{motivo=\"{}\",quando=\"{quando}\"}}", mo.nome),
+                        f64::from(u8::from(v)),
+                    );
+                }
+            }
+        }
+        if let Some(b) = &self.bateria {
+            if let Some(a) = b.amperes {
+                metrica(
+                    s,
+                    "termostato_bateria_amperes",
+                    "gauge",
+                    "Corrente da bateria: positiva carregando, negativa descarregando.",
+                );
+                valor(s, "termostato_bateria_amperes", "", a);
+            }
+            if let Some(p) = b.carga_pct {
+                metrica(
+                    s,
+                    "termostato_bateria_carga_pct",
+                    "gauge",
+                    "Carga da bateria, em %.",
+                );
+                valor(s, "termostato_bateria_carga_pct", "", p);
+            }
+            if let Some(l) = b.carregador_ligado {
+                metrica(
+                    s,
+                    "termostato_carregador_ligado",
+                    "gauge",
+                    "1 com o carregador ligado.",
+                );
+                valor(
+                    s,
+                    "termostato_carregador_ligado",
+                    "",
+                    f64::from(u8::from(l)),
+                );
+            }
+        }
+        self.da_energia(s);
+        if let Some((entra, sai)) = self.swap_mb_s {
+            metrica(
+                s,
+                "termostato_swap_mb_por_segundo",
+                "gauge",
+                "Swap trocado desde a leitura anterior, em MB/s.",
+            );
+            valor(
+                s,
+                "termostato_swap_mb_por_segundo",
+                "{sentido=\"entra\"}",
+                entra,
+            );
+            valor(
+                s,
+                "termostato_swap_mb_por_segundo",
+                "{sentido=\"sai\"}",
+                sai,
+            );
+        }
+        if let Some(n) = self.oom_mortes {
+            metrica(
+                s,
+                "termostato_oom_mortes_total",
+                "counter",
+                "Processos mortos pelo OOM killer desde o boot (/proc/vmstat oom_kill).",
+            );
+            valor(s, "termostato_oom_mortes_total", "", n as f64);
+        }
+        if !self.memoria_maiores.is_empty() {
+            metrica(
+                s,
+                "termostato_memoria_mb",
+                "gauge",
+                "Quem mais segura memória, somado por nome: RAM (ram) e swap (swap), em MB.",
+            );
+            for m in &self.memoria_maiores {
+                let n = rotulo(&m.nome);
+                valor(
+                    s,
+                    "termostato_memoria_mb",
+                    &format!("{{processo=\"{n}\",tipo=\"ram\"}}"),
+                    m.rss_mb,
+                );
+                valor(
+                    s,
+                    "termostato_memoria_mb",
+                    &format!("{{processo=\"{n}\",tipo=\"swap\"}}"),
+                    m.swap_mb,
+                );
+            }
+        }
+    }
+
+    fn da_energia(&self, s: &mut String) {
+        let e = &self.energia;
+        if let Some(v) = self.bateria.as_ref().and_then(|b| b.volts) {
+            metrica(s, "termostato_bateria_volts", "gauge", "Tensão da bateria.");
+            valor(s, "termostato_bateria_volts", "", v);
+        }
+        if !e.motivo_leituras.is_empty() {
+            metrica(
+                s,
+                "termostato_freio_motivo_total",
+                "counter",
+                "Leituras (de 2 s) em que cada motivo do freio do chip apareceu, agora ou no log do MSR 0x690.",
+            );
+            for (nome, n) in &e.motivo_leituras {
+                valor(
+                    s,
+                    "termostato_freio_motivo_total",
+                    &format!("{{motivo=\"{nome}\"}}"),
+                    *n as f64,
+                );
+            }
+        }
+        metrica(
+            s,
+            "termostato_prochot_eventos_total",
+            "counter",
+            "Vezes que a CPU foi freada por fora (PROCHOT: o SMC ou o carregador).",
+        );
+        valor(
+            s,
+            "termostato_prochot_eventos_total",
+            "",
+            e.prochot_eventos as f64,
+        );
+        metrica(
+            s,
+            "termostato_prochot_segundos_total",
+            "counter",
+            "Tempo com a CPU freada por fora (PROCHOT).",
+        );
+        valor(s, "termostato_prochot_segundos_total", "", e.prochot_s);
+        if self.bateria.is_some() {
+            metrica(
+                s,
+                "termostato_bateria_descarga_no_carregador_segundos_total",
+                "counter",
+                "Tempo com a bateria descarregando com o carregador ligado: o carregador não dá conta.",
+            );
+            valor(
+                s,
+                "termostato_bateria_descarga_no_carregador_segundos_total",
+                "",
+                e.descarga_s,
+            );
+            metrica(
+                s,
+                "termostato_bateria_descarga_no_carregador_wh_total",
+                "counter",
+                "Energia que a bateria deu com o carregador ligado, em Wh.",
+            );
+            valor(
+                s,
+                "termostato_bateria_descarga_no_carregador_wh_total",
+                "",
+                e.descarga_wh,
+            );
+            metrica(
+                s,
+                "termostato_bateria_descarga_no_carregador_episodios_total",
+                "counter",
+                "Vezes que a bateria começou a descarregar com o carregador ligado.",
+            );
+            valor(
+                s,
+                "termostato_bateria_descarga_no_carregador_episodios_total",
+                "",
+                e.descarga_episodios as f64,
+            );
+        }
+    }
+
     fn do_kernel(&self, s: &mut String) {
-        if let (Some(o), Some(tj)) = (self.tcc_offset_c, self.tjmax_c) {
+        if let Some(corte) = self.corte_c() {
             metrica(
                 s,
                 "termostato_tcc_corte_celsius",
                 "gauge",
-                "Temperatura em que o próprio chip se freia (TjMax menos o TCC offset).",
+                "Temperatura em que o próprio chip se freia: TjMax menos o TCC offset, ou o TjMax se o chip já passou do corte.",
+            );
+            valor(s, "termostato_tcc_corte_celsius", "", f64::from(corte));
+            metrica(
+                s,
+                "termostato_tcc_respeitado",
+                "gauge",
+                "0 se o chip já passou do corte do TCC offset (o offset gravado não segura).",
             );
             valor(
                 s,
-                "termostato_tcc_corte_celsius",
+                "termostato_tcc_respeitado",
                 "",
-                f64::from(tj.saturating_sub(o)),
+                f64::from(u8::from(!self.tcc_ignorado)),
             );
             metrica(
                 s,
@@ -136,7 +408,12 @@ impl Retrato {
                 "gauge",
                 "TCC offset gravado no chip (MSR 0x1A2).",
             );
-            valor(s, "termostato_tcc_offset_celsius", "", f64::from(o));
+            valor(
+                s,
+                "termostato_tcc_offset_celsius",
+                "",
+                f64::from(self.tcc_offset_c.unwrap_or(0)),
+            );
         }
         metrica(
             s,
@@ -306,6 +583,7 @@ impl Retrato {
             );
         }
         self.do_kernel(s);
+        self.do_vigia(s);
         metrica(
             s,
             "termostato_freio_antecipado",
@@ -537,6 +815,70 @@ impl Retrato {
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn texto_tem_o_que_o_vigia_le() {
+        let mut r = Retrato {
+            tcc_offset_c: Some(8),
+            tjmax_c: Some(100),
+            nucleos_c: vec![(0, 97.0), (3, 92.0)],
+            nucleos_estrangulamento: vec![(2, 9719)],
+            estrangulado_s: Some(16.4),
+            motivos: Some(Motivos::decodificar(0x3d22_1000)),
+            bateria: Some(Bateria {
+                carregador_ligado: Some(true),
+                estado: "Discharging".into(),
+                amperes: Some(-1.312),
+                carga_pct: Some(90.0),
+                volts: Some(12.6),
+            }),
+            swap_mb_s: Some((41.0, 2.5)),
+            oom_mortes: Some(4),
+            memoria_maiores: vec![MemoriaDe {
+                nome: "rustc".into(),
+                copias: 8,
+                rss_mb: 12288.0,
+                swap_mb: 11264.0,
+            }],
+            energia: EnergiaLida {
+                motivo_leituras: vec![("prochot", 5)],
+                prochot_eventos: 3,
+                prochot_s: 10.0,
+                descarga_s: 60.0,
+                descarga_wh: 1.5,
+                descarga_episodios: 7,
+            },
+            ..Retrato::default()
+        };
+        let t = r.em_texto();
+        for linha in [
+            "termostato_tcc_corte_celsius 92",
+            "termostato_tcc_respeitado 1",
+            "termostato_nucleo_celsius{nucleo=\"3\"} 92",
+            "termostato_nucleo_estrangulamento_total{nucleo=\"2\"} 9719",
+            "termostato_estrangulado_segundos_total 16.4",
+            "termostato_freio_motivo{motivo=\"termico\",quando=\"desde_o_boot\"} 1",
+            "termostato_freio_motivo{motivo=\"prochot\",quando=\"desde_o_boot\"} 0",
+            "termostato_freio_motivo{motivo=\"turbo_maximo\",quando=\"agora\"} 1",
+            "termostato_bateria_amperes -1.312",
+            "termostato_carregador_ligado 1",
+            "termostato_swap_mb_por_segundo{sentido=\"entra\"} 41",
+            "termostato_oom_mortes_total 4",
+            "termostato_memoria_mb{processo=\"rustc\",tipo=\"swap\"} 11264",
+            "termostato_bateria_volts 12.6",
+            "termostato_prochot_eventos_total 3",
+            "termostato_freio_motivo_total{motivo=\"prochot\"} 5",
+            "termostato_bateria_descarga_no_carregador_wh_total 1.5",
+            "termostato_bateria_descarga_no_carregador_episodios_total 7",
+        ] {
+            assert!(t.contains(linha), "faltou {linha}");
+        }
+        // O chip passou do corte: o corte de verdade é o TjMax.
+        r.tcc_ignorado = true;
+        let t = r.em_texto();
+        assert!(t.contains("termostato_tcc_corte_celsius 100"));
+        assert!(t.contains("termostato_tcc_respeitado 0"));
+    }
 
     #[test]
     fn texto_tem_o_que_o_painel_usa() {

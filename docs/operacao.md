@@ -111,7 +111,9 @@ ssh fedora 'sudoedit /etc/termostato.toml && sudo systemctl restart termostato'
 
 | Campo | Padrão | O que é |
 |---|---|---|
-| `tcc_offset_c` | 8 | O chip se freia sozinho a TjMax − offset (92 °C). 0 deixa o de fábrica; máximo 15 |
+| `tcc_offset_c` | 8 | O chip se freia sozinho a TjMax − offset (92 °C). 0 deixa o de fábrica; máximo 15. **Neste Haswell, ele é gravado mas não segura** (ver [a máquina](maquina.md)) |
+| `[caixa_preta] horas` | 24 | Quantas horas a caixa-preta guarda (1 a 168). Só muda reiniciando |
+| `[caixa_preta] mb_max` | 50 | O teto de espaço da caixa-preta, em MB (1 a 2000). Só muda reiniciando |
 | `psi_parado_ms` / `psi_janela_ms` | 150 / 1000 | O gatilho de pressão de memória no kernel. 0 desliga |
 | `[processos] aprender` / `antecipar` | `true` / `true` | Aprender quem esquenta e frear antes quando ele aparece |
 | `[processos] suspeito_c_s` | 1,0 | Nota de calor a partir da qual o processo é suspeito |
@@ -140,6 +142,96 @@ A configuração é validada ao subir. Um campo com erro de digitação, freio a
 | Ventoinhas mais silenciosas | `ventoinhas_calma_ate_c=65` (começam a subir mais tarde) ou `ventoinhas_suavizacao_s=40` (ignoram picos mais longos) ou `ventoinhas = "automatico"` (o pico de temperatura sobe) |
 | Ventoinhas sempre no máximo | `ventoinhas = "maximo"` |
 
+## Estressar a máquina (`termostato estresse`)
+
+Leva a CPU, a memória e o disco ao limite e mostra todos os sensores lado a lado, a cada 2 s. No fim, diz onde a máquina parou. O comando só gera carga e lê: o freio continua com o serviço e com os ajustes em vigor, e assim o teste mede a máquina como ela está.
+
+```bash
+ssh -t fedora 'sudo termostato estresse'
+```
+
+```bash
+ssh -t fedora 'sudo termostato estresse cpu segundos=120'
+```
+
+| Opção | Padrão | O que é |
+|---|---|---|
+| `cpu`, `memoria`, `disco` | os três | O que estressar. Sem nenhum, vão os três |
+| `segundos=` | 60 | De 5 a 1800 |
+| `threads=` | todas (8) | Threads de CPU |
+| `memoria_pct=` | 50 | Quanto da memória **disponível** ocupar, de 1 a 90 |
+| `disco_mb=` | 1024 | O tamanho do arquivo gravado e relido |
+| `pasta=` | `/var/tmp` | Onde fica o arquivo |
+
+**O que cada carga faz:**
+
+- **CPU:** uma thread por núcleo lógico, num laço de inteiros.
+- **Memória:** escreve um padrão diferente a cada volta e relê conferindo, como um memtest simples. Um erro de conferência aparece no resumo.
+- **Disco:** grava o arquivo com `fsync`, tira do cache, relê e confere. Mede os MB/s de gravação e de leitura.
+
+**As colunas:**
+
+| Coluna | O que é |
+|---|---|
+| `chip` | O pacote da CPU (`coretemp`) |
+| `núcleos` | Cada núcleo físico (`coretemp`, "Core N") |
+| `perto` | `TC0P`, o sensor na placa ao lado da CPU |
+| `dissip` | A média dos `TH0*`, o dissipador |
+| `W` | O pacote, pelo RAPL. Sem `sudo`, sai "—" |
+| `mem%` | A memória disponível (`MemAvailable`) |
+| `estrang` | Os estrangulamentos do chip desde a largada |
+
+**As proteções:**
+
+- A memória nunca deixa menos de 10 % do total livre. Se o disponível cair abaixo de 5 % durante o teste, ela é devolvida na hora.
+- O disco recusa começar sem `disco_mb` + 2 GiB livres. O arquivo `termostato-estresse-<pid>` é apagado no fim, também no Ctrl+C.
+- Com o chip em 99 °C ou mais por 30 s seguidos, a carga para: o limite foi achado.
+
+**O diagnóstico do fim:**
+
+| Linha | Quer dizer |
+|---|---|
+| ✅ Aguentou | Sem estrangulamento: há folga |
+| 🧱 O calor não sai do chip | Estrangulou com as ventoinhas no máximo e o dissipador subiu menos de 5 °C. O gargalo é entre o chip e o dissipador: pasta térmica ou contato |
+| 🌀 As ventoinhas não acompanharam | Estrangulou com as ventoinhas abaixo de 90 % do máximo |
+| 🔥 O resfriamento chegou ao limite | O dissipador esquentou junto: o chassi não dá conta de mais calor |
+
+O resumo também traz a média e o pico de cada núcleo, os estrangulamentos por núcleo e o tempo total estrangulado, com mais uma linha:
+
+| Linha | Quer dizer |
+|---|---|
+| ⚖️ Os núcleos estão parelhos | Até 8 °C entre o mais quente e o mais frio, com a mesma carga |
+| ⚖️ Os núcleos estão desiguais | Mais de 8 °C: a pasta não cobre o chip por igual |
+
+## A caixa-preta
+
+A cada leitura (2 s), o termostato grava uma linha JSON com o que explica um travamento:
+- cada núcleo, o PL1, os watts, os MHz e as ventoinhas;
+- os motivos do freio que o chip registra;
+- a bateria;
+- o PSI, a memória disponível, o swap por segundo e as mortes do OOM;
+- os 3 que mais gastam CPU e os 3 que mais seguram memória (RAM + swap, por nome).
+
+As linhas vão para `/var/lib/termostato/caixa-preta/<hora unix>.jsonl`, com `fsync` a cada 10 s. Ficam as últimas `[caixa_preta] horas` (24), até `mb_max` (50 MB).
+
+```bash
+ssh fedora 'sudo tail -1 /var/lib/termostato/caixa-preta/$(sudo ls /var/lib/termostato/caixa-preta | tail -1) | jq .'
+```
+
+**Depois de uma queda.** Ao parar limpo, o serviço grava o marcador `parada-limpa`. Se ele não está lá na subida seguinte, o journal e o Grafana recebem:
+
+```
+💥 a fedora parou às 2026-11-19 18:32:16 sem desligar (travou ou perdeu energia). A última leitura: chip 97 °C, memória disponível 0 %, PSI de memória 88 %, swap entrando 41 MB/s e saindo 63 MB/s. Quem segurava a memória: rustc ×8 (12.0 GB + 11.0 GB de swap), …
+```
+
+O último minuto vai para `/var/lib/termostato/quedas/<hora>.json`. Pelo `boot_id` de cada linha, o 💥 separa os dois casos:
+- **a máquina travou ou perdeu energia:** a última linha é de outro boot;
+- **o serviço foi morto e a máquina seguiu ligada:** a última linha é do mesmo boot.
+
+```bash
+ssh fedora 'sudo ls /var/lib/termostato/quedas && journalctl -u termostato | grep 💥'
+```
+
 ## Acompanhar
 
 - **Painel:** http://macpro-i7-alex:3000/d/termostato, pela tailnet.
@@ -164,7 +256,15 @@ A configuração é validada ao subir. Um campo com erro de digitação, freio a
 | 👀 `(observar) seguraria …` | O que as mãos fariam no modo observar |
 | 🤚 `…: CPU de 6.4 para 2.0 núcleos (cpu.max em 2.0 núcleos)` | As mãos seguraram alguém (modo agir) |
 | ↩️ `…: devolvido: …` | Um limite voltou ao original |
-| 🛡️ `TCC offset 0 → 8 °C: o chip se freia sozinho a 92 °C` | A proteção do chip foi gravada |
+| 🛡️ `TCC offset 0 → 8 °C: o chip se freia sozinho a 92 °C` | O offset foi gravado. Neste Haswell ele não segura: ver a linha abaixo |
+| 🛡️ `o chip chegou a … °C, acima do corte de 92 °C do TCC offset…` | O chip passou do corte: quem o protege é o TjMax (100 °C). O painel e a métrica passam a mostrar 100 |
+| 📼 `caixa-preta em …` | A caixa-preta está gravando |
+| 💥 `a fedora parou às … sem desligar…` | Houve queda desde a última parada, com a última leitura |
+| 🔋 `a bateria descarrega com o carregador ligado há … min…` | O carregador não dá conta da carga (5 min seguidos) |
+| 🔋 `a bateria caiu para … % mesmo com o carregador ligado…` | A carga ficou abaixo de 80 % no carregador. Com a bateria vazia, o SMC trava a CPU em ~800 MHz |
+| ⛔ `PROCHOT: a CPU foi freada por fora…: … MHz, chip … °C, CPU … W, bateria … A` | O SMC ou o carregador freou a CPU. Vai ao Grafana no máximo uma vez por minuto; todos contam |
+| ✅ `PROCHOT acabou depois de … s` | Fim do freio de fora |
+| 🔌 `carregador desligado…` / `carregador ligado de novo…` | O carregador saiu ou voltou, com a carga da bateria |
 | ⚡ `gatilho de pressão armado…` / `o kernel avisou…` | O kernel acorda o termostato quando a memória aperta |
 | ⚠️ … | Leitura ou escrita que falhou, com o motivo |
 
@@ -193,7 +293,20 @@ Em `127.0.0.1:9101/metrics`, lidas pelo Prometheus a cada 5 s:
 | `termostato_processo_nota_c_s{processo}` | O histórico negativo |
 | `termostato_freio_antecipado`, `termostato_segurados` | Suspeito ativo agora; cgroups segurados agora |
 | `termostato_acoes_total{acao}` | Cada ação, por tipo (`_observado` = só no modo observar) |
-| `termostato_tcc_corte_celsius`, `termostato_tcc_offset_celsius` | Onde o próprio chip se freia |
+| `termostato_tcc_corte_celsius`, `termostato_tcc_offset_celsius` | Onde o próprio chip se freia: TjMax − offset, ou o TjMax depois que o chip passou do corte |
+| `termostato_tcc_respeitado` | 0 se o chip já passou do corte do offset |
+| `termostato_nucleo_celsius{nucleo}` | Cada núcleo físico |
+| `termostato_nucleo_estrangulamento_total{nucleo}` | Estrangulamentos de cada núcleo desde o boot |
+| `termostato_estrangulado_segundos_total` | Tempo com o pacote estrangulado desde o boot |
+| `termostato_freio_motivo{motivo, quando="agora"\|"desde_o_boot"}` | Por que o chip está freado (`MSR 0x690`): `termico`, `pl1`, `pl2`, `corrente`, `prochot` (o SMC ou o carregador, por fora), `vr`, `turbo_maximo`, `utilizacao_autonoma` (o chip baixou por pouco uso), `atenuacao_turbo` |
+| `termostato_freio_motivo_total{motivo}` | Leituras de 2 s em que cada motivo apareceu, agora ou no log. O termostato limpa o log a cada leitura, e assim nenhum evento curto se perde |
+| `termostato_prochot_eventos_total`, `termostato_prochot_segundos_total` | Vezes e tempo com a CPU freada por fora |
+| `termostato_bateria_volts` | Tensão da bateria |
+| `termostato_bateria_descarga_no_carregador_segundos_total`, `_wh_total`, `_episodios_total` | Tempo, energia (Wh) e episódios da bateria descarregando com o carregador ligado |
+| `termostato_bateria_amperes`, `termostato_bateria_carga_pct`, `termostato_carregador_ligado` | A bateria (negativa descarregando) e o carregador |
+| `termostato_swap_mb_por_segundo{sentido="entra"\|"sai"}` | Swap trocado por segundo |
+| `termostato_oom_mortes_total` | Mortes do OOM killer desde o boot |
+| `termostato_memoria_mb{processo, tipo="ram"\|"swap"}` | Os 5 nomes que mais seguram memória |
 | `termostato_kernel_avisos_total` | Vezes que o kernel acordou o termostato |
 | `termostato_estrangulamento_total{onde}` | Estrangulamentos térmicos do chip desde o boot |
 | `termostato_dominio_watts{dominio}` | Potência dos núcleos, do gráfico e da memória |
@@ -210,6 +323,8 @@ Pelo e-mail do monitoramento (contato `email-pelo-carteiro`):
 
 | **O termostato segurou um processo ou contêiner** | As mãos agiram (só no modo agir) | Ver as marcas no painel e `journalctl -u termostato \| grep 🤚`. Para desfazer: modo observar e reiniciar |
 | **Pressão de memória alta** | Mais de 20 % por 2 min | Ver no painel quem está gastando. Compilação com muitos jobs, a VM e os contêineres do e2e juntos não cabem em 16 GB |
+| **A CPU foi freada por fora (PROCHOT)** | Qualquer evento em 5 min | Ver `journalctl -u termostato \| grep ⛔` e o painel "PROCHOT e bateria no carregador". O conserto é o MagSafe 2 de 85 W |
+| **A bateria descarrega com o carregador ligado há mais de 10 min** | A corrente da bateria abaixo de −0,1 A com o carregador ligado | Conferir se o carregador é o MagSafe 2 de 85 W. Com a bateria vazia, o SMC pode frear a CPU por fora: ver o painel "Por que o chip está freado" |
 
 Os alertas que já existiam no monitoramento continuam: CPU acima de 90 °C por 5 min e acima de 95 °C por 1 min.
 
@@ -221,6 +336,8 @@ Os alertas que já existiam no monitoramento continuam: CPU acima de 90 °C por 
 | `⚠️ … Permission denied` | O binário rodou fora do serviço, sem root | Rodar pelo `systemctl` |
 | Freio agindo o tempo todo em carga longa | O resfriamento só aguenta ~25 W com os 8 threads (ver [a máquina](maquina.md)) | Esperado. Para menos picos, `pl1_normal_w = 30` |
 | Temperatura subindo sem mudança de carga | Poeira nas aletas | Limpar as ventoinhas. A pasta térmica já foi trocada |
+| 🧱 no `termostato estresse`: chip a 100 °C, ventoinhas no máximo e dissipador frio | O calor não chega às aletas. Com a pasta já trocada e o ar de saída frio, o suspeito é o heat pipe ou o aperto do dissipador. Outros donos deste modelo veem o mesmo quadro, e trocar o dissipador não resolveu para eles (ver [a máquina](maquina.md#o-heat-pipe-o-calor-não-chega-às-aletas)) | Pôr a mão na saída de ar durante o estresse. Abrir e conferir o aperto por igual e a pasta bem fina. Trocar o dissipador só com a junta visivelmente quebrada |
+| 💥 no journal ao subir | A parada anterior não foi limpa | Ler a frase e o `/var/lib/termostato/quedas/`: memória, swap, OOM ou calor |
 | Painel em branco no navegador estreito | O Grafana precisa de largura para a grade | Abrir numa janela larga |
 
 ## Desenvolver

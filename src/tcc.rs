@@ -101,6 +101,11 @@ impl Msr {
         Self::ler_em(&self.dispositivos[0], registro)
     }
 
+    /// Na CPU 0 (o `MSR 0x690` é do pacote).
+    pub fn gravar(&self, registro: u64, valor: u64) -> Result<(), String> {
+        Self::gravar_em(&self.dispositivos[0], registro, valor)
+    }
+
     /// O offset em vigor (CPU 0) e o TjMax.
     pub fn estado(&self) -> Result<(u8, u8), String> {
         let v = self.ler(MSR_TEMPERATURE_TARGET)?;
