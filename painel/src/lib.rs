@@ -13,7 +13,7 @@ use std::rc::Rc;
 use ravenrs::prelude::*;
 use serde_json::{Value, json};
 
-use modelo::{Estado, ha, milhar, nome_do_sensor, num};
+use modelo::{Estado, ha, milhar, nome_do_motivo, nome_do_sensor, num};
 
 /// Quem manda um ajuste ao termostato (o corpo do `POST /api/ajustes`).
 pub type Ajustar = Rc<dyn Fn(Value)>;
@@ -64,6 +64,10 @@ pub fn app(estado: State<Option<Estado>>, ajustar: Ajustar) -> impl View {
                 .spacing(VAO)
                 .align(Align::Stretch)
                 .wrap(),
+                HStack::new((nucleos(e(), tres), motivos(e(), tres), bateria(e(), tres)))
+                    .spacing(VAO)
+                    .align(Align::Stretch)
+                    .wrap(),
                 HStack::new((freio_por_hora(e(), meio), sensores(e(), meio)))
                     .spacing(VAO)
                     .align(Align::Stretch)
@@ -93,12 +97,17 @@ fn lido(estado: &State<Option<Estado>>) -> Estado {
 }
 
 /// Um cartão do painel: título, uma linha de descrição e o conteúdo.
-fn cartao(titulo: &str, descricao: &str, largura: f32, conteudo: impl View + 'static) -> impl View {
+fn cartao<D: Into<String>, C: View + 'static>(
+    titulo: &str,
+    descricao: D,
+    largura: f32,
+    conteudo: C,
+) -> impl View + use<D, C> {
     Card::new(
         VStack::new((
             VStack::new((
-                Text::new(titulo).style(TextStyle::Headline),
-                Text::new(descricao)
+                Text::new(titulo.to_string()).style(TextStyle::Headline),
+                Text::new(descricao.into())
                     .style(TextStyle::Callout)
                     .foreground(Semantic::InkMuted),
             ))
@@ -617,7 +626,7 @@ fn potencia(estado: State<Option<Estado>>, largura: f32) -> impl View {
 fn ventoinhas(estado: State<Option<Estado>>, largura: f32) -> impl View {
     cartao(
         "Ventoinhas",
-        "No máximo desde o boot",
+        "Rotação agora, pela curva do termostato",
         largura,
         view_fn(move || {
             let e = lido(&estado);
@@ -674,6 +683,140 @@ fn quem_gasta(estado: State<Option<Estado>>, largura: f32) -> impl View {
                 .format(|v| format!("{} %", num(v, 0)))
         }),
     )
+}
+
+fn nucleos(estado: State<Option<Estado>>, largura: f32) -> impl View {
+    view_fn(move || {
+        let e = lido(&estado);
+        let temps: Vec<f64> = e.nucleos.iter().map(|n| n.celsius).collect();
+        let diferenca = match (
+            temps.iter().copied().reduce(f64::max),
+            temps.iter().copied().reduce(f64::min),
+        ) {
+            (Some(a), Some(b)) => format!(
+                "{} °C entre o mais quente e o mais frio{}",
+                num(a - b, 0),
+                if a - b >= 8.0 { ": desiguais" } else { "" }
+            ),
+            _ => "Sem leitura dos núcleos".into(),
+        };
+        let barras: Vec<AnyView> = e
+            .nucleos
+            .iter()
+            .map(|n| {
+                Box::new(
+                    ProgressBar::new((n.celsius / 100.0).clamp(0.0, 1.0) as f32)
+                        .label(format!("Núcleo {}", n.nucleo))
+                        .detail(format!(
+                            "{} °C · {} estrangulamentos desde o boot",
+                            num(n.celsius, 0),
+                            milhar(n.estrangulamentos.unwrap_or(0) as f64)
+                        ))
+                        .tone(if n.celsius >= 90.0 {
+                            Tone::Warning
+                        } else {
+                            Tone::Accent
+                        }),
+                ) as AnyView
+            })
+            .collect();
+        cartao(
+            "Cada núcleo",
+            diferenca,
+            largura,
+            VStack::new(barras)
+                .spacing(12.0)
+                .align(Align::Stretch)
+                .width(largura - 48.0),
+        )
+    })
+}
+
+fn motivos(estado: State<Option<Estado>>, largura: f32) -> impl View {
+    view_fn(move || {
+        let e = lido(&estado);
+        let mut tabela = Table::new([
+            Column::new("Motivo").weight(2.0),
+            Column::new("Agora"),
+            Column::new("Desde o boot"),
+            Column::new("Leituras").numeric(),
+        ]);
+        for m in &e.motivos {
+            tabela = tabela.row([
+                nome_do_motivo(&m.nome),
+                if m.agora { "sim" } else { "—" }.into(),
+                if m.desde_o_boot { "sim" } else { "nunca" }.into(),
+                milhar(m.leituras as f64),
+            ]);
+        }
+        let p = &e.prochot;
+        let resumo = if p.eventos == 0 {
+            "Pelo MSR 0x690. PROCHOT: nenhum desde a subida".to_string()
+        } else {
+            format!(
+                "Pelo MSR 0x690. PROCHOT: {} vezes, {} s com a CPU freada por fora",
+                milhar(p.eventos as f64),
+                num(p.segundos, 0)
+            )
+        };
+        cartao("Por que o chip freia", resumo, largura, tabela)
+    })
+}
+
+fn bateria(estado: State<Option<Estado>>, largura: f32) -> impl View {
+    view_fn(move || {
+        let e = lido(&estado);
+        let b = e.bateria.clone().unwrap_or_default();
+        let a = b.amperes.unwrap_or(0.0);
+        let carregador = match b.carregador {
+            Some(true) => "Carregador ligado",
+            Some(false) => "Na bateria",
+            None => "Sem leitura",
+        };
+        let descarrega_no_carregador = b.carregador == Some(true) && a < -0.1;
+        let carga = b.carga_pct.unwrap_or(0.0);
+        cartao(
+            "Bateria e carregador",
+            if descarrega_no_carregador {
+                "Descarregando no carregador: ele não dá conta da carga"
+            } else {
+                carregador
+            },
+            largura,
+            VStack::new((
+                Stat::new(
+                    "Corrente da bateria",
+                    b.amperes.map_or("—".into(), |a| {
+                        format!("{}{} A", if a > 0.0 { "+" } else { "" }, num(a, 2))
+                    }),
+                )
+                .delta_toned(
+                    b.volts.map_or("—".into(), |v| format!("{} V", num(v, 2))),
+                    a >= 0.0,
+                    !descarrega_no_carregador,
+                ),
+                ProgressBar::new((carga / 100.0).clamp(0.0, 1.0) as f32)
+                    .label("Carga")
+                    .detail(format!("{} %", num(carga, 0)))
+                    .tone(if carga < 80.0 {
+                        Tone::Warning
+                    } else {
+                        Tone::Accent
+                    }),
+                Text::new(format!(
+                    "Com o carregador ligado, a bateria já deu {} Wh em {} min ({} vezes)",
+                    num(b.descarga_wh, 2),
+                    num(b.descarga_s / 60.0, 0),
+                    milhar(b.descarga_episodios as f64)
+                ))
+                .style(TextStyle::Callout)
+                .foreground(Semantic::InkMuted),
+            ))
+            .spacing(16.0)
+            .align(Align::Stretch)
+            .width(largura - 48.0),
+        )
+    })
 }
 
 fn freio_por_hora(estado: State<Option<Estado>>, largura: f32) -> impl View {
@@ -1035,6 +1178,32 @@ mod testes {
             .filter(|p| matches!(p, ravenrs::core::Primitive::Glyphs(_)))
             .count();
         assert!(textos > 40, "a página tem texto: {textos}");
+    }
+
+    fn glifos(v: impl View + 'static) -> usize {
+        let mut ui = Ui::new(v, Theme::raven_dark());
+        ui.set_viewport(ravenrs::core::Size::new(480.0, 600.0), 1.0);
+        ui.update();
+        ui.scene()
+            .primitives()
+            .iter()
+            .filter(|p| matches!(p, ravenrs::core::Primitive::Glyphs(_)))
+            .count()
+    }
+
+    #[test]
+    fn os_cartoes_da_energia_desenham_com_e_sem_dados() {
+        let cheio = State::new(Some(exemplo()));
+        let vazio = State::new(Some(Estado::default()));
+        // Com dados, cada cartão tem mais texto que vazio: as barras dos
+        // núcleos, as linhas dos motivos, a corrente e a carga.
+        assert!(glifos(nucleos(cheio.clone(), 480.0)) > glifos(nucleos(vazio.clone(), 480.0)));
+        assert!(glifos(motivos(cheio.clone(), 480.0)) > glifos(motivos(vazio.clone(), 480.0)));
+        assert!(glifos(bateria(cheio, 480.0)) >= glifos(bateria(vazio.clone(), 480.0)));
+        // Sem estado nenhum (o termostato ainda não respondeu), nada quebra.
+        glifos(bateria(State::new(None), 480.0));
+        glifos(nucleos(State::new(None), 480.0));
+        glifos(motivos(vazio, 480.0));
     }
 
     #[test]

@@ -20,6 +20,64 @@ pub struct Estado {
     pub feitos: Vec<Feito>,
     pub decisao: Decisao,
     pub ajustes: Ajustes,
+    pub nucleos: Vec<Nucleo>,
+    pub motivos: Vec<MotivoDoFreio>,
+    pub prochot: Prochot,
+    pub bateria: Option<Bateria>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct Nucleo {
+    pub nucleo: u32,
+    pub celsius: f64,
+    pub estrangulamentos: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct MotivoDoFreio {
+    pub nome: String,
+    pub agora: bool,
+    pub desde_o_boot: bool,
+    pub leituras: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct Prochot {
+    pub eventos: u64,
+    pub segundos: f64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct Bateria {
+    pub carregador: Option<bool>,
+    pub estado: String,
+    pub amperes: Option<f64>,
+    pub volts: Option<f64>,
+    pub carga_pct: Option<f64>,
+    pub descarga_s: f64,
+    pub descarga_wh: f64,
+    pub descarga_episodios: u64,
+}
+
+/// O nome de um motivo do freio do chip (`MSR 0x690`) em português.
+pub fn nome_do_motivo(codigo: &str) -> String {
+    match codigo {
+        "prochot" => "PROCHOT (freio de fora)",
+        "termico" => "Calor no chip",
+        "pl1" => "Limite PL1",
+        "pl2" => "Limite PL2",
+        "corrente" => "Corrente elétrica",
+        "vr" => "Regulador de tensão quente",
+        "turbo_maximo" => "Teto do turbo",
+        "utilizacao_autonoma" => "Pouco uso (o chip baixou sozinho)",
+        "atenuacao_turbo" => "Trocas do turbo seguradas",
+        outro => outro,
+    }
+    .to_string()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -191,6 +249,8 @@ mod testes {
         assert_eq!(ha(1500.0, 0.0), "há 25 min");
         assert_eq!(nome_do_sensor("TB0T"), "Bateria (TB0T)");
         assert_eq!(nome_do_sensor("XYZ1"), "XYZ1");
+        assert_eq!(nome_do_motivo("prochot"), "PROCHOT (freio de fora)");
+        assert_eq!(nome_do_motivo("novo"), "novo");
     }
 
     #[test]
@@ -203,5 +263,17 @@ mod testes {
         assert_eq!(e.agora.temperatura, Some(64.0));
         assert_eq!(e.decisao.vence, "alvo");
         assert!(e.serie.is_empty());
+        assert!(e.nucleos.is_empty() && e.motivos.is_empty() && e.bateria.is_none());
+        let e: Estado = serde_json::from_str(
+            r#"{"nucleos":[{"nucleo":2,"celsius":99.0,"estrangulamentos":9719}],
+                "motivos":[{"nome":"prochot","agora":false,"desde_o_boot":true,"leituras":1}],
+                "prochot":{"eventos":1,"segundos":2.0},
+                "bateria":{"carregador":true,"amperes":-1.21,"carga_pct":90.0}}"#,
+        )
+        .unwrap();
+        assert_eq!(e.nucleos[0].estrangulamentos, Some(9719));
+        assert!(e.motivos[0].desde_o_boot);
+        assert_eq!(e.prochot.eventos, 1);
+        assert_eq!(e.bateria.unwrap().amperes, Some(-1.21));
     }
 }

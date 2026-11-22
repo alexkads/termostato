@@ -4,6 +4,10 @@ Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs
 
 ## Ainda não lançado: ventoinhas pela curva
 
+- **Painel com a energia (#26):**
+  - três cartões novos: "Cada núcleo", "Por que o chip freia" (os motivos do `MSR 0x690` e o PROCHOT) e "Bateria e carregador" (corrente, tensão, carga e os Wh tirados da bateria com o carregador ligado);
+  - o `GET /api/estado` passa a mandar `nucleos`, `motivos`, `prochot` e `bateria`;
+  - o cartão das ventoinhas deixa de dizer "No máximo desde o boot".
 - **Registro de cada PROCHOT e de cada descarga da bateria no carregador (#24):**
   - o termostato limpa o log do `MSR 0x690` a cada leitura, e assim nenhum freio de fora curto se perde;
   - ⛔ e ✅ no journal, anotação no Grafana (no máximo uma por minuto), `termostato_prochot_eventos_total` e `_segundos_total`;
