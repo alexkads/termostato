@@ -140,6 +140,67 @@ A configuração é validada ao subir. Um campo com erro de digitação, freio a
 | Ventoinhas mais silenciosas | `ventoinhas_calma_ate_c=65` (começam a subir mais tarde) ou `ventoinhas_suavizacao_s=40` (ignoram picos mais longos) ou `ventoinhas = "automatico"` (o pico de temperatura sobe) |
 | Ventoinhas sempre no máximo | `ventoinhas = "maximo"` |
 
+## Estressar a máquina (`termostato estresse`)
+
+Leva a CPU, a memória e o disco ao limite e mostra todos os sensores lado a lado, a cada 2 s. No fim, diz onde a máquina parou. O comando só gera carga e lê: o freio continua com o serviço e com os ajustes em vigor, e assim o teste mede a máquina como ela está.
+
+```bash
+ssh -t fedora 'sudo termostato estresse'
+```
+
+```bash
+ssh -t fedora 'sudo termostato estresse cpu segundos=120'
+```
+
+| Opção | Padrão | O que é |
+|---|---|---|
+| `cpu`, `memoria`, `disco` | os três | O que estressar. Sem nenhum, vão os três |
+| `segundos=` | 60 | De 5 a 1800 |
+| `threads=` | todas (8) | Threads de CPU |
+| `memoria_pct=` | 50 | Quanto da memória **disponível** ocupar, de 1 a 90 |
+| `disco_mb=` | 1024 | O tamanho do arquivo gravado e relido |
+| `pasta=` | `/var/tmp` | Onde fica o arquivo |
+
+**O que cada carga faz:**
+
+- **CPU:** uma thread por núcleo lógico, num laço de inteiros.
+- **Memória:** escreve um padrão diferente a cada volta e relê conferindo, como um memtest simples. Um erro de conferência aparece no resumo.
+- **Disco:** grava o arquivo com `fsync`, tira do cache, relê e confere. Mede os MB/s de gravação e de leitura.
+
+**As colunas:**
+
+| Coluna | O que é |
+|---|---|
+| `chip` | O pacote da CPU (`coretemp`) |
+| `núcleos` | Cada núcleo físico (`coretemp`, "Core N") |
+| `perto` | `TC0P`, o sensor na placa ao lado da CPU |
+| `dissip` | A média dos `TH0*`, o dissipador |
+| `W` | O pacote, pelo RAPL. Sem `sudo`, sai "—" |
+| `mem%` | A memória disponível (`MemAvailable`) |
+| `estrang` | Os estrangulamentos do chip desde a largada |
+
+**As proteções:**
+
+- A memória nunca deixa menos de 10 % do total livre. Se o disponível cair abaixo de 5 % durante o teste, ela é devolvida na hora.
+- O disco recusa começar sem `disco_mb` + 2 GiB livres. O arquivo `termostato-estresse-<pid>` é apagado no fim, também no Ctrl+C.
+- Com o chip em 99 °C ou mais por 30 s seguidos, a carga para: o limite foi achado.
+
+**O diagnóstico do fim:**
+
+| Linha | Quer dizer |
+|---|---|
+| ✅ Aguentou | Sem estrangulamento: há folga |
+| 🧱 O calor não sai do chip | Estrangulou com as ventoinhas no máximo e o dissipador subiu menos de 5 °C. O gargalo é entre o chip e o dissipador: pasta térmica ou contato |
+| 🌀 As ventoinhas não acompanharam | Estrangulou com as ventoinhas abaixo de 90 % do máximo |
+| 🔥 O resfriamento chegou ao limite | O dissipador esquentou junto: o chassi não dá conta de mais calor |
+
+O resumo também traz a média e o pico de cada núcleo, os estrangulamentos por núcleo e o tempo total estrangulado, com mais uma linha:
+
+| Linha | Quer dizer |
+|---|---|
+| ⚖️ Os núcleos estão parelhos | Até 8 °C entre o mais quente e o mais frio, com a mesma carga |
+| ⚖️ Os núcleos estão desiguais | Mais de 8 °C: a pasta não cobre o chip por igual |
+
 ## Acompanhar
 
 - **Painel:** http://macpro-i7-alex:3000/d/termostato, pela tailnet.

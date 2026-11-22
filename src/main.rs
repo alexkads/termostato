@@ -17,10 +17,12 @@
 //!   sudo termostato CPU50C              # ajustes com o serviço rodando
 //!   sudo termostato chave=valor …       # (ver `ajustes.rs`)
 //!   termostato ajustes                  # o que está em vigor
+//!   sudo termostato estresse [cpu] [memoria] [disco] …  # (ver `estresse.rs`)
 
 mod ajustes;
 mod avisos;
 mod config;
+mod estresse;
 mod fabrica;
 mod freio;
 mod gatilhos;
@@ -75,6 +77,13 @@ struct Estado {
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "estresse") {
+        if let Err(e) = estresse::principal(&args[1..]) {
+            eprintln!("❌ {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if let Some(pedido) = ajustes::interpretar(&args) {
         let caminho = std::env::var_os("TERMOSTATO_CONFIG")
             .map_or_else(|| PathBuf::from(CONFIG_PADRAO), PathBuf::from);
