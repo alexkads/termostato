@@ -122,7 +122,9 @@ O que isso quer dizer:
 - [No iFixit](https://ts.ifixit.com/Answers/View/538140/Is+my+heat+sink+broken), um dono trocou a pasta e depois **dois dissipadores usados**. A carga seguiu em 95–98 °C, com o calor chegando só ao começo das aletas.
 - [Num Mid 2014 15"](https://forums.macrumors.com/threads/cannot-get-a-good-repaste-on-2014-15-macbook-pro.2437146/), o dono passou por PTM7950 duas vezes, MX-6 duas vezes e trocou o dissipador. O que ajudou foi aplicar a pasta **o mais fina possível** e apertar o dissipador **por igual**: a diferença entre núcleos caiu de 15 °C para 2–3 °C. Mesmo assim, com undervolt, pads térmicos até a carcaça e uma base com ventoinha, ele segura 3,5 GHz com o pacote em **96–97 °C**. Nesses modelos, 95–100 °C em carga cheia é comum.
 
-Então o dissipador frio com o chip quente pode ser **o jeito deste projeto** (os heat pipes só levam bem o calor com o chip já muito quente), e não um defeito desta máquina. Comprar um dissipador novo **pode não mudar nada**.
+**Na fedora, um técnico já ressoldou o heat pipe** (lembrado pelo dono em 22/11/2026). Isso pesa a favor de um defeito nesta máquina. Soldar um heat pipe esquenta o tubo muito além do que ele foi feito para aguentar: o fluido de dentro ferve e pode escapar, e a estrutura interna (o pavio) pode se deformar. Mesmo sem vazar, a junta refeita com solda comum conduz pior que a original. A decisão do dono, por ora, é trabalhar com o freio puxado (`freio_comeca_c = 75`, por ajuste), sem trocar o dissipador.
+
+Ainda assim, o dissipador frio com o chip quente pode ser também **o jeito deste projeto** (os heat pipes só levam bem o calor com o chip já muito quente), e não um defeito desta máquina. Comprar um dissipador novo **pode não mudar nada**.
 
 **O que fazer:**
 1. Fazer primeiro o teste da mão na saída de ar (abaixo). Se o ar sair quente, o dissipador está trabalhando, e não há o que trocar.
