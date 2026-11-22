@@ -196,13 +196,14 @@ pub fn linha(r: &Retrato, agora: f64, boot: &str) -> String {
     let motivos = r
         .motivos
         .as_ref()
-        .map(|m| json!({ "agora": m.agora(), "desde_o_boot": m.desde_o_boot() }));
+        .map(|m| json!({ "agora": m.agora(), "janela": m.na_janela(), "desde_o_boot": m.desde_o_boot() }));
     let bateria = r.bateria.as_ref().map(|b| {
         json!({
             "carregador": b.carregador_ligado,
             "estado": b.estado,
             "a": b.amperes.map(|x| arredondar(x, 2)),
             "pct": b.carga_pct,
+            "v": b.volts.map(|x| arredondar(x, 2)),
         })
     });
     json!({
@@ -325,6 +326,21 @@ pub fn descrever(q: &Queda, fuso: i64) -> String {
     if let Some(a) = u["bateria"]["a"].as_f64() {
         partes.push(format!("bateria {a:+.2} A"));
     }
+    let prochot = q
+        .ultimas
+        .iter()
+        .filter(|l| {
+            l["motivos"]["janela"]
+                .as_array()
+                .is_some_and(|v| v.iter().any(|m| m == "prochot"))
+        })
+        .count();
+    if prochot > 0 {
+        partes.push(format!(
+            "PROCHOT em {prochot} das últimas {} leituras (a CPU freada por fora)",
+            q.ultimas.len()
+        ));
+    }
     format!(
         "💥 {o_que}. A última leitura: {}. Quem segurava a memória: {mem_top}",
         partes.join(", ")
@@ -411,6 +427,7 @@ mod testes {
         let u: Value = serde_json::from_str(
             r#"{"t":1795123936,"boot":"a","chip":97,"mem_disp_pct":0.4,"psi":{"mem":88.5},
                "swap_mb_s":{"entra":41.2,"sai":63.0},"bateria":{"a":-1.31},
+               "motivos":{"janela":["prochot","termico"]},
                "mem_top":[["rustc",8,12288,11264],["qemu-system-x86",1,3072,0]]}"#,
         )
         .unwrap();
@@ -427,6 +444,7 @@ mod testes {
         assert!(t.contains("memória disponível 0 %"), "{t}");
         assert!(t.contains("swap entrando 41 MB/s e saindo 63 MB/s"), "{t}");
         assert!(t.contains("bateria -1.31 A"), "{t}");
+        assert!(t.contains("PROCHOT em 1 das últimas 1 leituras"), "{t}");
         assert!(t.contains("rustc ×8 (12.0 GB + 11.0 GB de swap)"), "{t}");
         let q = Queda {
             mesmo_boot: true,

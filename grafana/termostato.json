@@ -1233,6 +1233,72 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "PROCHOT e bateria no carregador",
+      "description": "Eventos de PROCHOT (a CPU freada por fora pelo SMC ou pelo carregador) e a energia que a bateria deu com o carregador ligado. Com o carregador certo (MagSafe 2 de 85 W), as duas linhas ficam em zero.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 70,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(termostato_prochot_eventos_total[10m])",
+          "legendFormat": "PROCHOT (eventos em 10 min)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(termostato_prochot_segundos_total[10m])",
+          "legendFormat": "PROCHOT (segundos em 10 min)",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(termostato_bateria_descarga_no_carregador_wh_total[1h])",
+          "legendFormat": "bateria no carregador (Wh por hora)",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(termostato_bateria_descarga_no_carregador_episodios_total[1h])",
+          "legendFormat": "descargas no carregador (por hora)",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      }
     }
   ],
   "templating": {

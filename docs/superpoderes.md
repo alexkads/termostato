@@ -14,6 +14,7 @@ Da 0.5 em diante, o termostato não olha só a temperatura. Ele vê os processos
 | 🐳 Contêineres | o nome de cada um, pela API do Docker | `NanoCpus` pela API do Docker |
 | ⚡ Kernel | gatilho de pressão, estrangulamento, domínios do RAPL | o laço acorda na hora |
 | 🛡️ Chip | o registro de temperatura (`MSR 0x1A2`) | TCC offset: gravado para o chip se frear a 92 °C, mas **este Haswell não o respeita** (vai a 100 °C) |
+| ⛔ PROCHOT e 🔋 bateria | o log do `MSR 0x690`, limpo a cada leitura, e a bateria (corrente, tensão, carregador) | cada freio de fora e cada descarga no carregador vira evento, contador e Wh |
 | 📼 Caixa-preta | núcleos, motivos do freio (`MSR 0x690`), bateria, swap, OOM e memória por processo | grava tudo a cada 2 s e explica a queda no boot seguinte |
 | 📣 Grafana | — | anotação a cada ação, contador por tipo, e-mail quando age |
 

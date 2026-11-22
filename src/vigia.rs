@@ -24,39 +24,112 @@ use std::path::Path;
 /// Os bits do `MSR_CORE_PERF_LIMIT_REASONS` (0x690) no Haswell: o bit de
 /// "agora" e o de "desde a última limpeza" (o log, 16 acima).
 pub const MSR_MOTIVOS: u64 = 0x690;
+/// `utilizacao_autonoma`: o próprio chip baixou a frequência por pouco uso.
+/// `atenuacao_turbo`: o chip segurou as trocas de frequência do turbo.
 const MOTIVOS: &[(&str, u32)] = &[
     ("prochot", 0),
     ("termico", 1),
+    ("utilizacao_autonoma", 5),
     ("vr", 6),
     ("corrente", 8),
     ("pl1", 10),
     ("pl2", 11),
     ("turbo_maximo", 12),
+    ("atenuacao_turbo", 13),
 ];
+
+/// Os bits de log dos motivos: o termostato os limpa a cada leitura, para cada
+/// leitura dizer o que aconteceu desde a anterior (ver `energia.rs`).
+pub const MASCARA_DO_LOG: u64 = {
+    let mut m = 0;
+    let mut i = 0;
+    while i < MOTIVOS.len() {
+        m |= 1 << (MOTIVOS[i].1 + 16);
+        i += 1;
+    }
+    m
+};
+
+/// A leitura que vale para a janela. Na primeira, o log traz o que aconteceu
+/// desde o boot (ou desde a última limpeza), sem data: ele entra só no
+/// acumulado, e a janela fica com o bit de agora. Sem isso, o PROCHOT antigo
+/// viraria um evento falso a cada subida do serviço (visto em 22/11/2026).
+pub fn valor_da_janela(valor: u64, primeira: bool) -> u64 {
+    if primeira {
+        valor & !MASCARA_DO_LOG
+    } else {
+        valor
+    }
+}
+
+/// Um motivo do freio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Motivo {
+    pub nome: &'static str,
+    /// O bit de agora.
+    pub agora: bool,
+    /// Agora ou no log: aconteceu desde a leitura anterior.
+    pub na_janela: bool,
+    /// Aconteceu desde o boot.
+    pub desde_o_boot: bool,
+}
 
 /// Por que o chip está abaixo da frequência pedida.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Motivos {
-    /// (motivo, agora, desde o boot), na ordem de `MOTIVOS`.
-    pub lista: Vec<(&'static str, bool, bool)>,
+    /// Na ordem de `MOTIVOS`.
+    pub lista: Vec<Motivo>,
 }
 
 impl Motivos {
+    /// Sem limpar o log: o log é o "desde o boot".
+    #[cfg(test)]
     pub fn decodificar(valor: u64) -> Self {
+        Self::de(valor, valor)
+    }
+
+    /// `valor` é a leitura de agora; `acumulado`, os bits de log vistos neste
+    /// boot (o termostato limpa o log a cada leitura).
+    pub fn de(valor: u64, acumulado: u64) -> Self {
         Self {
             lista: MOTIVOS
                 .iter()
-                .map(|(nome, bit)| (*nome, valor >> bit & 1 == 1, valor >> (bit + 16) & 1 == 1))
+                .map(|(nome, bit)| {
+                    let agora = valor >> bit & 1 == 1;
+                    let log = valor >> (bit + 16) & 1 == 1;
+                    Motivo {
+                        nome,
+                        agora,
+                        na_janela: agora || log,
+                        desde_o_boot: log || agora || acumulado >> (bit + 16) & 1 == 1,
+                    }
+                })
                 .collect(),
         }
     }
 
     pub fn agora(&self) -> Vec<&'static str> {
-        self.lista.iter().filter(|m| m.1).map(|m| m.0).collect()
+        self.lista
+            .iter()
+            .filter(|m| m.agora)
+            .map(|m| m.nome)
+            .collect()
+    }
+
+    pub fn na_janela(&self) -> Vec<&'static str> {
+        self.lista
+            .iter()
+            .filter(|m| m.na_janela)
+            .map(|m| m.nome)
+            .collect()
     }
 
     pub fn desde_o_boot(&self) -> Vec<&'static str> {
-        self.lista.iter().filter(|m| m.2).map(|m| m.0).collect()
+        self.lista
+            .iter()
+            .filter(|m| m.desde_o_boot)
+            .map(|m| m.nome)
+            .collect()
     }
 }
 
@@ -69,6 +142,7 @@ pub struct Bateria {
     /// Positivo carregando, negativo descarregando.
     pub amperes: Option<f64>,
     pub carga_pct: Option<f64>,
+    pub volts: Option<f64>,
 }
 
 impl Bateria {
@@ -102,6 +176,9 @@ pub fn bateria(sysfs: &Path) -> Option<Bateria> {
                     if b.estado == "Discharging" { -a } else { a }
                 });
                 b.carga_pct = ler_texto(&p.join("capacity")).and_then(|v| v.parse().ok());
+                b.volts = ler_texto(&p.join("voltage_now"))
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(|uv| uv / 1e6);
             }
             _ => {}
         }
@@ -233,11 +310,43 @@ mod testes {
         assert_eq!(m.agora(), vec!["turbo_maximo"]);
         assert_eq!(
             m.desde_o_boot(),
-            vec!["termico", "corrente", "pl1", "pl2", "turbo_maximo"]
+            vec![
+                "termico",
+                "utilizacao_autonoma",
+                "corrente",
+                "pl1",
+                "pl2",
+                "turbo_maximo",
+                "atenuacao_turbo"
+            ]
         );
         let m = Motivos::decodificar(1 | 1 << 16);
         assert_eq!(m.agora(), vec!["prochot"]);
         assert_eq!(m.desde_o_boot(), vec!["prochot"]);
+    }
+
+    #[test]
+    fn a_primeira_leitura_nao_conta_o_log_antigo() {
+        // PROCHOT no log, de antes da subida; agora só o turbo.
+        let v = 1 << 16 | 1 << 12;
+        let m = Motivos::de(valor_da_janela(v, true), v & MASCARA_DO_LOG);
+        assert_eq!(m.na_janela(), vec!["turbo_maximo"]);
+        assert!(m.desde_o_boot().contains(&"prochot"));
+        let m = Motivos::de(valor_da_janela(v, false), v & MASCARA_DO_LOG);
+        assert!(m.na_janela().contains(&"prochot"));
+    }
+
+    #[test]
+    fn o_log_limpo_continua_valendo_desde_o_boot() {
+        // O log já foi limpo; o acumulado lembra que houve PROCHOT e PL1.
+        let acumulado = 1 << 16 | 1 << 26;
+        let m = Motivos::de(1 << 12, acumulado);
+        assert_eq!(m.agora(), vec!["turbo_maximo"]);
+        assert_eq!(m.na_janela(), vec!["turbo_maximo"]);
+        assert_eq!(m.desde_o_boot(), vec!["prochot", "pl1", "turbo_maximo"]);
+        // A máscara tem só os bits de log (16 acima de cada motivo).
+        assert_eq!(MASCARA_DO_LOG, 0x3d63_0000);
+        assert_eq!(0x3d22_1000 & !MASCARA_DO_LOG, 0x1000);
     }
 
     fn escrever(raiz: &Path, caminho: &str, texto: &str) {
@@ -255,10 +364,16 @@ mod testes {
         escrever(d.path(), "class/power_supply/BAT0/status", "Discharging\n");
         escrever(d.path(), "class/power_supply/BAT0/current_now", "1312000\n");
         escrever(d.path(), "class/power_supply/BAT0/capacity", "90\n");
+        escrever(
+            d.path(),
+            "class/power_supply/BAT0/voltage_now",
+            "12631000\n",
+        );
         let b = bateria(d.path()).unwrap();
         assert_eq!(b.carregador_ligado, Some(true));
         assert_eq!(b.amperes, Some(-1.312));
         assert_eq!(b.carga_pct, Some(90.0));
+        assert_eq!(b.volts, Some(12.631));
         assert!(b.descarrega_no_carregador());
         escrever(d.path(), "class/power_supply/BAT0/status", "Charging\n");
         let b = bateria(d.path()).unwrap();

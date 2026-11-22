@@ -4,6 +4,14 @@ Todas de 19/11/2026. O porquê de cada mudança está em [docs/decisoes.md](docs
 
 ## Ainda não lançado: ventoinhas pela curva
 
+- **Registro de cada PROCHOT e de cada descarga da bateria no carregador (#24):**
+  - o termostato limpa o log do `MSR 0x690` a cada leitura, e assim nenhum freio de fora curto se perde;
+  - ⛔ e ✅ no journal, anotação no Grafana (no máximo uma por minuto), `termostato_prochot_eventos_total` e `_segundos_total`;
+  - a bateria ganha a tensão e os acumulados com o carregador ligado (segundos, Wh, episódios);
+  - 🔌 quando o carregador sai ou volta, e 🔋 quando a carga cai abaixo de 80 % no carregador;
+  - dois motivos novos: `utilizacao_autonoma` e `atenuacao_turbo`.
+
+  Grafana: o painel "PROCHOT e bateria no carregador" e o alerta "A CPU foi freada por fora (PROCHOT)". O 💥 da caixa-preta diz quantas leituras com PROCHOT houve no último minuto.
 - **Caixa-preta (#21):** a cada leitura, uma linha JSON em `/var/lib/termostato/caixa-preta/` com:
   - cada núcleo e os motivos do freio do chip (`MSR 0x690`);
   - a bateria, o PSI, a memória, o swap por segundo e as mortes do OOM;

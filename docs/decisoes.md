@@ -169,3 +169,9 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 **Decisão.** Ler o `MSR 0x690` (`MSR_CORE_PERF_LIMIT_REASONS`) a cada volta, pelo mesmo driver `msr` do TCC, só lendo, sem limpar o log. Publicar cada motivo, agora e desde o boot.
 **Por quê.** O chip anota o motivo de cada redução de frequência. Em 22/11 ele mostrou térmico, PL1, PL2 e corrente, e **nunca PROCHOT externo**: a hipótese caiu em um minuto. Sem limpar o log, o "desde o boot" continua valendo para quem ler à mão.
 
+## 30. Limpar o log do `MSR 0x690` a cada leitura (revendo a 29)
+
+**Contexto.** Em 22/11/2026, o carregador de 85 W da fedora foi trocado por um mais fraco, e a caixa-preta pegou um PROCHOT de 2 s, porque ele caiu numa leitura. Um PROCHOT de meio segundo entre duas leituras sumiria, e sem limpar o log ele só diria "aconteceu desde o boot".
+**Decisão.** A cada volta, o termostato lê o `0x690` e grava o mesmo valor com os bits de log (16–29) zerados. Um motivo vale para a leitura se o bit de agora ou o de log estiver ligado. O "desde o boot" vira um acumulado do próprio termostato, guardado em `<estado>/motivos-<boot_id>` para sobreviver a um reinício do serviço. Se a gravação falhar, um ⚠️ e segue só lendo.
+**Por quê.** Assim cada evento é contado e datado com a precisão de uma leitura, que é o que o dono pediu: o registro de cada PROCHOT. O custo é que, quem ler o `0x690` à mão, vê só o que aconteceu nos últimos 2 s. O "desde o boot" está na métrica `termostato_freio_motivo{quando="desde_o_boot"}`.
+

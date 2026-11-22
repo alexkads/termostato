@@ -23,6 +23,7 @@ mod ajustes;
 mod avisos;
 mod caixa_preta;
 mod config;
+mod energia;
 mod estresse;
 mod fabrica;
 mod freio;

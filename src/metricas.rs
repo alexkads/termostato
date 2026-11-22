@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
+use crate::energia::EnergiaLida;
 use crate::pressao::Pressao;
 use crate::vigia::{Bateria, MemoriaDe, Motivos};
 
@@ -111,6 +112,8 @@ pub struct Retrato {
     pub memoria_maiores: Vec<MemoriaDe>,
     /// O chip já passou do corte do TCC: o offset não está sendo respeitado.
     pub tcc_ignorado: bool,
+    /// Os acumulados de PROCHOT e da bateria no carregador (`energia.rs`).
+    pub energia: EnergiaLida,
 }
 
 /// Escapa um valor de rótulo do Prometheus.
@@ -197,13 +200,13 @@ impl Retrato {
                 "gauge",
                 "Por que o chip está abaixo da frequência pedida (MSR 0x690): 1 se o motivo vale agora ou valeu desde o boot. prochot = o SMC ou o carregador freando por fora.",
             );
-            for (nome, agora, desde) in &m.lista {
-                for (quando, v) in [("agora", agora), ("desde_o_boot", desde)] {
+            for mo in &m.lista {
+                for (quando, v) in [("agora", mo.agora), ("desde_o_boot", mo.desde_o_boot)] {
                     valor(
                         s,
                         "termostato_freio_motivo",
-                        &format!("{{motivo=\"{nome}\",quando=\"{quando}\"}}"),
-                        f64::from(u8::from(*v)),
+                        &format!("{{motivo=\"{}\",quando=\"{quando}\"}}", mo.nome),
+                        f64::from(u8::from(v)),
                     );
                 }
             }
@@ -242,6 +245,7 @@ impl Retrato {
                 );
             }
         }
+        self.da_energia(s);
         if let Some((entra, sai)) = self.swap_mb_s {
             metrica(
                 s,
@@ -293,6 +297,87 @@ impl Retrato {
                     m.swap_mb,
                 );
             }
+        }
+    }
+
+    fn da_energia(&self, s: &mut String) {
+        let e = &self.energia;
+        if let Some(v) = self.bateria.as_ref().and_then(|b| b.volts) {
+            metrica(s, "termostato_bateria_volts", "gauge", "Tensão da bateria.");
+            valor(s, "termostato_bateria_volts", "", v);
+        }
+        if !e.motivo_leituras.is_empty() {
+            metrica(
+                s,
+                "termostato_freio_motivo_total",
+                "counter",
+                "Leituras (de 2 s) em que cada motivo do freio do chip apareceu, agora ou no log do MSR 0x690.",
+            );
+            for (nome, n) in &e.motivo_leituras {
+                valor(
+                    s,
+                    "termostato_freio_motivo_total",
+                    &format!("{{motivo=\"{nome}\"}}"),
+                    *n as f64,
+                );
+            }
+        }
+        metrica(
+            s,
+            "termostato_prochot_eventos_total",
+            "counter",
+            "Vezes que a CPU foi freada por fora (PROCHOT: o SMC ou o carregador).",
+        );
+        valor(
+            s,
+            "termostato_prochot_eventos_total",
+            "",
+            e.prochot_eventos as f64,
+        );
+        metrica(
+            s,
+            "termostato_prochot_segundos_total",
+            "counter",
+            "Tempo com a CPU freada por fora (PROCHOT).",
+        );
+        valor(s, "termostato_prochot_segundos_total", "", e.prochot_s);
+        if self.bateria.is_some() {
+            metrica(
+                s,
+                "termostato_bateria_descarga_no_carregador_segundos_total",
+                "counter",
+                "Tempo com a bateria descarregando com o carregador ligado: o carregador não dá conta.",
+            );
+            valor(
+                s,
+                "termostato_bateria_descarga_no_carregador_segundos_total",
+                "",
+                e.descarga_s,
+            );
+            metrica(
+                s,
+                "termostato_bateria_descarga_no_carregador_wh_total",
+                "counter",
+                "Energia que a bateria deu com o carregador ligado, em Wh.",
+            );
+            valor(
+                s,
+                "termostato_bateria_descarga_no_carregador_wh_total",
+                "",
+                e.descarga_wh,
+            );
+            metrica(
+                s,
+                "termostato_bateria_descarga_no_carregador_episodios_total",
+                "counter",
+                "Vezes que a bateria começou a descarregar com o carregador ligado.",
+            );
+            valor(
+                s,
+                "termostato_bateria_descarga_no_carregador_episodios_total",
+                "",
+                e.descarga_episodios as f64,
+            );
         }
     }
 
@@ -745,6 +830,7 @@ mod testes {
                 estado: "Discharging".into(),
                 amperes: Some(-1.312),
                 carga_pct: Some(90.0),
+                volts: Some(12.6),
             }),
             swap_mb_s: Some((41.0, 2.5)),
             oom_mortes: Some(4),
@@ -754,6 +840,14 @@ mod testes {
                 rss_mb: 12288.0,
                 swap_mb: 11264.0,
             }],
+            energia: EnergiaLida {
+                motivo_leituras: vec![("prochot", 5)],
+                prochot_eventos: 3,
+                prochot_s: 10.0,
+                descarga_s: 60.0,
+                descarga_wh: 1.5,
+                descarga_episodios: 7,
+            },
             ..Retrato::default()
         };
         let t = r.em_texto();
@@ -771,6 +865,11 @@ mod testes {
             "termostato_swap_mb_por_segundo{sentido=\"entra\"} 41",
             "termostato_oom_mortes_total 4",
             "termostato_memoria_mb{processo=\"rustc\",tipo=\"swap\"} 11264",
+            "termostato_bateria_volts 12.6",
+            "termostato_prochot_eventos_total 3",
+            "termostato_freio_motivo_total{motivo=\"prochot\"} 5",
+            "termostato_bateria_descarga_no_carregador_wh_total 1.5",
+            "termostato_bateria_descarga_no_carregador_episodios_total 7",
         ] {
             assert!(t.contains(linha), "faltou {linha}");
         }

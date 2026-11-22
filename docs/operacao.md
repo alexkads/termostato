@@ -261,6 +261,10 @@ ssh fedora 'sudo ls /var/lib/termostato/quedas && journalctl -u termostato | gre
 | 📼 `caixa-preta em …` | A caixa-preta está gravando |
 | 💥 `a fedora parou às … sem desligar…` | Houve queda desde a última parada, com a última leitura |
 | 🔋 `a bateria descarrega com o carregador ligado há … min…` | O carregador não dá conta da carga (5 min seguidos) |
+| 🔋 `a bateria caiu para … % mesmo com o carregador ligado…` | A carga ficou abaixo de 80 % no carregador. Com a bateria vazia, o SMC trava a CPU em ~800 MHz |
+| ⛔ `PROCHOT: a CPU foi freada por fora…: … MHz, chip … °C, CPU … W, bateria … A` | O SMC ou o carregador freou a CPU. Vai ao Grafana no máximo uma vez por minuto; todos contam |
+| ✅ `PROCHOT acabou depois de … s` | Fim do freio de fora |
+| 🔌 `carregador desligado…` / `carregador ligado de novo…` | O carregador saiu ou voltou, com a carga da bateria |
 | ⚡ `gatilho de pressão armado…` / `o kernel avisou…` | O kernel acorda o termostato quando a memória aperta |
 | ⚠️ … | Leitura ou escrita que falhou, com o motivo |
 
@@ -294,7 +298,11 @@ Em `127.0.0.1:9101/metrics`, lidas pelo Prometheus a cada 5 s:
 | `termostato_nucleo_celsius{nucleo}` | Cada núcleo físico |
 | `termostato_nucleo_estrangulamento_total{nucleo}` | Estrangulamentos de cada núcleo desde o boot |
 | `termostato_estrangulado_segundos_total` | Tempo com o pacote estrangulado desde o boot |
-| `termostato_freio_motivo{motivo, quando="agora"\|"desde_o_boot"}` | Por que o chip está freado (`MSR 0x690`): `termico`, `pl1`, `pl2`, `corrente`, `prochot` (o SMC ou o carregador, por fora), `vr`, `turbo_maximo` |
+| `termostato_freio_motivo{motivo, quando="agora"\|"desde_o_boot"}` | Por que o chip está freado (`MSR 0x690`): `termico`, `pl1`, `pl2`, `corrente`, `prochot` (o SMC ou o carregador, por fora), `vr`, `turbo_maximo`, `utilizacao_autonoma` (o chip baixou por pouco uso), `atenuacao_turbo` |
+| `termostato_freio_motivo_total{motivo}` | Leituras de 2 s em que cada motivo apareceu, agora ou no log. O termostato limpa o log a cada leitura, e assim nenhum evento curto se perde |
+| `termostato_prochot_eventos_total`, `termostato_prochot_segundos_total` | Vezes e tempo com a CPU freada por fora |
+| `termostato_bateria_volts` | Tensão da bateria |
+| `termostato_bateria_descarga_no_carregador_segundos_total`, `_wh_total`, `_episodios_total` | Tempo, energia (Wh) e episódios da bateria descarregando com o carregador ligado |
 | `termostato_bateria_amperes`, `termostato_bateria_carga_pct`, `termostato_carregador_ligado` | A bateria (negativa descarregando) e o carregador |
 | `termostato_swap_mb_por_segundo{sentido="entra"\|"sai"}` | Swap trocado por segundo |
 | `termostato_oom_mortes_total` | Mortes do OOM killer desde o boot |
@@ -315,6 +323,7 @@ Pelo e-mail do monitoramento (contato `email-pelo-carteiro`):
 
 | **O termostato segurou um processo ou contêiner** | As mãos agiram (só no modo agir) | Ver as marcas no painel e `journalctl -u termostato \| grep 🤚`. Para desfazer: modo observar e reiniciar |
 | **Pressão de memória alta** | Mais de 20 % por 2 min | Ver no painel quem está gastando. Compilação com muitos jobs, a VM e os contêineres do e2e juntos não cabem em 16 GB |
+| **A CPU foi freada por fora (PROCHOT)** | Qualquer evento em 5 min | Ver `journalctl -u termostato \| grep ⛔` e o painel "PROCHOT e bateria no carregador". O conserto é o MagSafe 2 de 85 W |
 | **A bateria descarrega com o carregador ligado há mais de 10 min** | A corrente da bateria abaixo de −0,1 A com o carregador ligado | Conferir se o carregador é o MagSafe 2 de 85 W. Com a bateria vazia, o SMC pode frear a CPU por fora: ver o painel "Por que o chip está freado" |
 
 Os alertas que já existiam no monitoramento continuam: CPU acima de 90 °C por 5 min e acima de 95 °C por 1 min.
