@@ -612,7 +612,7 @@ pub fn diagnosticar(r: &Resumo) -> String {
     }
     match subiu {
         Some(s) if s < 5.0 => format!(
-            "🧱 O calor não sai do chip: ele chegou a {chip:.0} °C com as ventoinhas no máximo, e o dissipador subiu só {s:.0} °C. O gargalo é a passagem do chip para o dissipador: pasta térmica velha ou contato ruim."
+            "🧱 O calor não sai do chip: ele chegou a {chip:.0} °C com as ventoinhas no máximo, e o dissipador subiu só {s:.0} °C. O calor não chega às aletas: o heat pipe (a solda dele com a placa de cobre), o contato do dissipador ou a pasta."
         ),
         Some(s) => format!(
             "🔥 O resfriamento chegou ao limite: o chip foi a {chip:.0} °C e o dissipador esquentou junto (+{s:.0} °C), com as ventoinhas no máximo. O chassi não dá conta de mais calor que isso."

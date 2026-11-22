@@ -327,7 +327,7 @@ Os alertas que já existiam no monitoramento continuam: CPU acima de 90 °C por 
 | `⚠️ … Permission denied` | O binário rodou fora do serviço, sem root | Rodar pelo `systemctl` |
 | Freio agindo o tempo todo em carga longa | O resfriamento só aguenta ~25 W com os 8 threads (ver [a máquina](maquina.md)) | Esperado. Para menos picos, `pl1_normal_w = 30` |
 | Temperatura subindo sem mudança de carga | Poeira nas aletas | Limpar as ventoinhas. A pasta térmica já foi trocada |
-| 🧱 no `termostato estresse`: chip a 100 °C, ventoinhas no máximo e dissipador frio | O calor não passa do chip para o dissipador. Com a pasta já trocada, o suspeito é o contato: parafusos do dissipador, pasta demais ou mal espalhada | Abrir e conferir o assentamento do dissipador |
+| 🧱 no `termostato estresse`: chip a 100 °C, ventoinhas no máximo e dissipador frio | O calor não chega às aletas. Com a pasta já trocada e o ar de saída frio, o suspeito principal é o heat pipe: a solda dele com a placa de cobre, quebrada (ver [a máquina](maquina.md#o-heat-pipe-o-calor-não-chega-às-aletas)) | Abrir: conferir os parafusos do dissipador e a solda do heat pipe. Se estiver trincada, trocar o dissipador inteiro |
 | 💥 no journal ao subir | A parada anterior não foi limpa | Ler a frase e o `/var/lib/termostato/quedas/`: memória, swap, OOM ou calor |
 | Painel em branco no navegador estreito | O Grafana precisa de largura para a grade | Abrir numa janela larga |
 

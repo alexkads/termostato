@@ -89,9 +89,40 @@ Com o freio do termostato desligado (`pl1_normal_w=100 pl1_freio_w=100`, por aju
 | Memória | 26 voltas de escrita e conferência, 0 erros |
 | Disco | Grava 113 MB/s e lê 92 MB/s (fora do cache), 0 erros |
 
-O diagnóstico do comando: 🧱 **o calor não sai do chip**. As ventoinhas já estão no máximo e o ar interno está frio (39 °C), mas o dissipador não esquenta: o calor fica preso entre o chip e o dissipador. A pasta térmica **já foi trocada** (ver [Problemas conhecidos](operacao.md#problemas-conhecidos)). Então o suspeito é o **contato**: os parafusos do dissipador, pasta demais ou mal espalhada. Os núcleos estão parelhos (7 °C entre o mais quente e o mais frio, abaixo dos 8 °C do critério), mas o núcleo 2 sozinho fez 94 % dos estrangulamentos.
+O diagnóstico do comando: 🧱 **o calor não sai do chip**. As ventoinhas já estão no máximo e o ar interno está frio (39 °C), mas o dissipador não esquenta: o calor fica preso entre o chip e o dissipador. A pasta térmica **já foi trocada** (ver [Problemas conhecidos](operacao.md#problemas-conhecidos)). Então o suspeito é o **contato** ou o **heat pipe**: ver a medição abaixo. Os núcleos estão parelhos (7 °C entre o mais quente e o mais frio, abaixo dos 8 °C do critério), mas o núcleo 2 sozinho fez 94 % dos estrangulamentos.
 
 Uma carga curta antes disso (`openssl speed`, ~20 s) chegou a puxar **57–72 W**, com o chip de 64 a 98 °C em 2 s.
+
+### O heat pipe: o calor não chega às aletas
+
+Um comentário antigo dizia que **a solda do heat pipe com a placa de cobre estava quebrada**. Para conferir, os 31 sensores do `applesmc` foram lidos antes e no fim de 45 s de carga (`sudo termostato estresse cpu segundos=45`, ~38 W de média, ventoinhas no máximo):
+
+| Onde | Sensores | Subiu |
+|---|---|---|
+| **O chip** (núcleos, pacote, GPU, system agent) | `TC0E`, `TC0F`, `TC1C`–`TC4C`, `TCXC`, `TCGC`, `TCSA` | **+12 a +24 °C** (até 97–99 °C) |
+| A placa ao lado da CPU | `TC0P` | +11 °C |
+| **O dissipador e os heat pipes** | `TH0A`, `TH0B`, `TH0V`, `Th1H`, `Th2H` | **−1 a +2 °C** |
+| O ar dentro e o de saída | `Ta0P`, `TaSP` | 0 °C |
+| Memória, chipset, bateria, apoio de mãos | `TM0P`, `TPCD`, `TB*T`, `Ts*` | 0 a +1 °C |
+
+E 20 s **depois** de parar a carga, com a CPU quase parada, o chip ainda estava em **84–86 °C**.
+
+O que isso quer dizer:
+
+- **38 W por 45 s são ~1,7 kJ.** Com o dissipador funcionando, esse calor passa pelo heat pipe até as aletas, e as aletas e o ar de saída esquentam vários graus. Aqui eles **não se mexeram**, com as ventoinhas no máximo.
+- **Pasta ruim não explicaria isso sozinha.** Com pasta ruim, o chip fica mais quente, mas o calor que ele dissipa continua indo para o dissipador, e as aletas esquentam. E a pasta já foi trocada.
+- **O chip demora a esfriar** mesmo sem carga: o calor em volta dele não tem para onde ir.
+- O que o calor esquenta é **a placa** (`TC0P`, +11 °C). É o caminho de quem não tem dissipador.
+
+É o retrato de um **heat pipe que não transporta calor**: a solda com a placa de cobre trincada, ou o tubo furado (sem o fluido, ele vira um tubo de cobre comum). O contato do dissipador solto daria um quadro parecido, e é mais barato de conferir.
+
+**O que fazer:**
+1. Abrir e conferir os parafusos do dissipador (os de mola, em volta da CPU). Solto, basta apertar.
+2. Olhar a junta entre o heat pipe e a placa de cobre sobre o chip. Trinca ou folga ali confirma a quebra.
+3. Se estiver quebrada: **trocar o dissipador inteiro** (o heat pipe vem soldado nele), com pasta nova. Atenção ao modelo: o MacBookPro11,2 (A1398, só Iris Pro) usa o dissipador **sem a placa da GPU dedicada**. O do MacBookPro11,3 (com GeForce GT 750M) é outro.
+4. Depois, repetir `sudo termostato estresse segundos=60`. Com o dissipador bom, os `TH0*` e o ar de saída sobem junto com o chip, e o 🧱 vira 🔥 ou ✅.
+
+**Um teste sem abrir:** com o `termostato estresse` rodando, ponha a mão na saída de ar da dobradiça. Com o chip a 99 °C e as ventoinhas no máximo, o ar deveria sair quente. Saindo morno, o calor não está chegando às aletas.
 
 ### O que o chip diz que o freou
 
