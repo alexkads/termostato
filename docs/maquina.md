@@ -131,6 +131,8 @@ O que isso quer dizer:
 
 A decisão do dono, por ora, é trabalhar com o freio puxado (`freio_comeca_c = 75`, por ajuste), sem mexer no dissipador.
 
+O passo a passo para abrir, conferir o pino e remontar, com a medição de referência de antes, está na issue [#23](https://github.com/alexkads/termostato/issues/23).
+
 Ainda assim, o dissipador frio com o chip quente pode ser também **o jeito deste projeto** (os heat pipes só levam bem o calor com o chip já muito quente), e não um defeito desta máquina. Comprar um dissipador novo **pode não mudar nada**.
 
 **O que fazer:**
