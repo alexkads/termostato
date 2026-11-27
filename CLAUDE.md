@@ -22,7 +22,7 @@ Quem pegar a issue precisa conseguir trabalhar **sem perguntar nada**. O modelo 
 - **Telas:** o link do Artifact com o nome da prancheta. Sem tela, diga isso.
 - **Dependências:** outras issues e PRs, com link.
 - **Referências:** arquivos e docs do repositório.
-- **Critérios de aceite:** verificáveis na fedora, no formato entrada → resultado (o que o journal mostra, que métrica muda), incluindo o caso de recusa e o `cargo test` / `cargo clippy` limpos.
+- **Critérios de aceite:** verificáveis na fedora, no formato entrada → resultado (o que o journal mostra, que métrica muda), incluindo o caso de recusa e o `cargo xtask pr` limpo.
 - **Label:** `enhancement` para recurso novo e `bug` para defeito.
 
 ### O PR
@@ -33,10 +33,11 @@ O modelo é o #13. A descrição leva:
 - **Por quê** e **O que entra**, em bullets.
 - **Para quem revisa:** o que não é óbvio, como mudanças de padrão que não chegam ao `/etc/termostato.toml` já instalado.
 - **Provado na fedora (<data>):** o que foi visto de verdade no journal, nas métricas ou no painel depois do `instalar.sh`.
-- **Testes:** quantos e o que cobrem, e o clippy.
+- **Testes:** quantos e o que cobrem, e a tabela de tempos do `cargo xtask pr`.
 
 ## Desenvolver
 
-- Antes do PR: `cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test`. Os testes rodam no Mac, sem root.
+- Enquanto trabalha, `cargo xtask dev`. Antes do PR, `cargo xtask pr`, e antes de publicar uma versão, `cargo xtask release`. Nenhum deles recebe argumentos. Depois de mudar o painel, `cargo xtask painel`, e o `painel/dist/` vai no mesmo commit. Não se cria `.sh` novo.
+- As checagens rodam na fedora, sob a trava da oficina (veja o README), e não no Mac do Alex. Os testes não pedem root.
 - A instalação de verdade é na fedora (`macpro-i7-alex`), pelo `rsync` e o `./instalar.sh` do README.
 - O RPM nunca troca o `/etc/termostato.toml` instalado. Um padrão novo precisa ser levado à mão, ou pelo `sudo termostato chave=valor`, e o PR diz isso.

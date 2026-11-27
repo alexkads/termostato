@@ -1,0 +1,13 @@
+[package]
+name = "xtask"
+description = "As checagens do termostato, uma por finalidade: cargo xtask dev, pr, release e painel"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+publish = false
+
+# Só a biblioteca padrão: compila em segundos, antes de qualquer checagem.
+[dependencies]
+
+[lints]
+workspace = true

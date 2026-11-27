@@ -6,6 +6,12 @@ rust-version = "1.100"
 description = "Guarda o calor da fedora (MacBookPro11,2): limite de potência da CPU, freio de calor, ventoinhas e métricas para o Prometheus"
 publish = false
 
+# O termostato e as checagens (`cargo xtask`, #28). O painel tem workspace
+# próprio: fixa o RavenRS num commit e compila para wasm.
+[workspace]
+members = [".", "xtask"]
+exclude = ["painel"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
@@ -16,10 +22,13 @@ signal-hook = "0.3"
 [dev-dependencies]
 tempfile = "3"
 
-[lints.rust]
+[lints]
+workspace = true
+
+[workspace.lints.rust]
 unsafe_code = "forbid"
 
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 # Prosa em português cita nomes (MacBook, PL1) que a regra quer entre crases.
@@ -30,6 +39,14 @@ assert_is_empty = "allow"
 cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
+
+# Os testes rodam muitas vezes e as dependências compilam uma vez: elas vão
+# otimizadas e nada leva debuginfo (guia de desempenho de build do Cargo).
+[profile.dev]
+debug = false
+
+[profile.dev.package."*"]
+opt-level = 1
 
 [profile.release]
 opt-level = "s"
