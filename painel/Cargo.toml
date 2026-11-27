@@ -1,6 +1,6 @@
 # O painel do termostato: um app RavenRS para o navegador (WebGL2), embutido no
 # binário do termostato. Workspace próprio: o RPM do termostato não compila isto,
-# usa o que `compilar.sh` deixou em `dist/`.
+# usa o que `cargo xtask painel` deixou em `dist/`.
 [package]
 name = "painel"
 version = "0.8.0"
@@ -33,3 +33,11 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 strip = true
+
+# Como no workspace da raiz: dependências otimizadas e sem debuginfo, porque os
+# testes desenham a página inteira muitas vezes e o RavenRS compila uma vez.
+[profile.dev]
+debug = false
+
+[profile.dev.package."*"]
+opt-level = 1

@@ -52,10 +52,10 @@ O `instalar.sh` põe ali o dono da máquina na tailnet e publica o painel com `t
 O código está em `painel/` (uma crate RavenRS à parte). Depois de mudar:
 
 ```bash
-painel/compilar.sh
+cargo xtask painel
 ```
 
-Ele compila para `wasm32-unknown-unknown`, passa pelo `wasm-bindgen` 0.2.130 (igual ao do RavenRS) e pelo `wasm-opt`, e deixa `index.html`, `painel.js` e `painel_bg.wasm` em `painel/dist/`, que o termostato embute. Commit o `dist/` junto: o RPM não compila wasm.
+Ele confere as ferramentas, e diz como instalar o que faltar: o alvo `wasm32-unknown-unknown` e o `wasm-bindgen` da versão do `painel/Cargo.lock`. Depois compila para `wasm32-unknown-unknown`, passa pelo `wasm-bindgen` 0.2.130 (igual ao do RavenRS) e pelo `wasm-opt`, e deixa `index.html`, `painel.js` e `painel_bg.wasm` em `painel/dist/`, que o termostato embute. Commit o `dist/` junto: o RPM não compila wasm, e o `cargo xtask dev` e o `pr` falham se o código do painel mudou e o `dist/` não.
 
 Para ver sem a fedora, sirva `painel/dist/` com o `exemplo.json` em `api/estado`:
 
@@ -63,4 +63,4 @@ Para ver sem a fedora, sirva `painel/dist/` com o `exemplo.json` em `api/estado`
 mkdir -p /tmp/painel/api && cp painel/dist/* /tmp/painel/ && cp painel/exemplo.json /tmp/painel/api/estado && python3 -m http.server -d /tmp/painel 8765
 ```
 
-Os testes do painel (`cd painel && cargo test`) desenham a página inteira sem janela, nos temas Escuro e Claro, com o exemplo e sem estado.
+Os testes do painel (rodam no `cargo xtask dev` e no `pr` quando o painel muda, e sempre no `release`) desenham a página inteira sem janela, nos temas Escuro e Claro, com o exemplo e sem estado.

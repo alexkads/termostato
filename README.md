@@ -95,7 +95,16 @@ A tabela completa, as receitas ("quero menos calor", "quero frear mais cedo") e 
 Toda mudança começa por uma **issue** e entra por um **PR** para o `main`, nunca direto. O formato de cada um está no [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
-cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
+cargo xtask dev       # enquanto trabalha: formata e confere só o que a mudança toca
+cargo xtask pr        # o gate do PR: tudo o que a mudança alcança
+cargo xtask release   # antes de publicar uma versão: tudo, com a documentação e o cargo deny
+cargo xtask painel    # depois de mudar o painel: regrava o painel/dist/
+```
+
+As checagens são subcomandos do [`xtask/`](xtask/src/main.rs), sem script `.sh`, e cada uma faz uma coisa: nenhuma recebe argumentos. Elas comparam com `origin/main` (ou `CHECK_BASE`) e conferem só o que a mudança alcança. O painel alcança o termostato, porque o termostato embute o `painel/dist/`. No fim aparece a tabela de tempos de cada etapa. Os testes rodam no [`cargo-nextest`](https://nexte.st) (`cargo install cargo-nextest --locked`), e o `release` usa também o `cargo-deny`. A compilação pesada vai para a fedora, sob a trava da oficina:
+
+```bash
+ssh fedora 'cd ~/oficina/repos/termostato && CARGO_BUILD_JOBS=6 flock ~/oficina/.trava-compilacao nice -n 10 cargo xtask pr'
 ```
 
 Rust 1.100.0 (Edition 2024), fixado só neste projeto em [`rust-toolchain.toml`](rust-toolchain.toml). Os testes montam um sysfs de mentira numa pasta temporária e rodam em qualquer máquina, sem root. A compilação e a instalação de verdade são feitas na fedora, onde está o hardware.

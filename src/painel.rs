@@ -22,7 +22,7 @@ use crate::avisos;
 use crate::config::Config;
 use crate::metricas::Retrato;
 
-/// A página e o app, compilados por `painel/compilar.sh`.
+/// A página e o app, compilados por `cargo xtask painel`.
 pub const ARQUIVOS: &[(&str, &str, &[u8])] = &[
     (
         "/",

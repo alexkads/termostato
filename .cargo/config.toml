@@ -1,0 +1,4 @@
+# `cargo xtask <tarefa>`: as checagens do termostato, um subcomando por
+# finalidade (#28). Veja o README, seção Desenvolver.
+[alias]
+xtask = "run -q -p xtask --"

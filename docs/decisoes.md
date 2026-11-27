@@ -143,10 +143,16 @@ Cada decisão com o contexto em que foi tomada e o que a sustenta. Todas de 19/1
 ## 25. O painel em RavenRS, embutido no binário
 
 **Contexto.** O dono pediu uma interface própria, "linda", desenhada com o design system do RCB (RavenComponentBook, o do RavenRS) e feita com os componentes do RavenRS em WebGL2.
-**Decisão.** Uma crate à parte (`painel/`, workspace próprio, RavenRS fixado num commit) compilada para wasm por `painel/compilar.sh`; o resultado (`painel/dist/`) fica no repositório e o termostato o embute com `include_bytes!`. O app não fala HTTP: a página busca `/api/estado` a cada segundo e entrega o JSON ao wasm, e os ajustes voltam por `window.termostatoAjustar`.
+**Decisão.** Uma crate à parte (`painel/`, workspace próprio, RavenRS fixado num commit) compilada para wasm por `cargo xtask painel` (até 27/11/2026, `painel/compilar.sh`); o resultado (`painel/dist/`) fica no repositório e o termostato o embute com `include_bytes!`. O app não fala HTTP: a página busca `/api/estado` a cada segundo e entrega o JSON ao wasm, e os ajustes voltam por `window.termostatoAjustar`.
 **Por quê.** O RPM continua compilando em segundos, sem toolchain de wasm na fedora, e o painel nunca fica de versão diferente do serviço. O custo são 6 MB de wasm no git a cada mudança do painel.
 
 ## 26. Ajustar pelo painel só pela tailnet
 
 **Decisão.** O `POST /api/ajustes` exige o cabeçalho `Tailscale-User-Login` de um login listado em `[painel] quem_pode_ajustar` (que só muda no toml, reiniciando), corpo JSON e `Origin` do próprio host.
 **Por quê.** O `tailscale serve` identifica quem pede sem senha nova. O JSON obriga o navegador a um preflight de CORS que o servidor não responde, e o `Origin` barra outra página aberta no navegador do dono. Um processo local poderia forjar o cabeçalho no loopback, mas na fedora o único usuário já tem `sudo` sem senha: não há ganho de privilégio.
+
+## 27. As checagens são subcomandos do `cargo xtask`
+
+**Contexto.** A checagem era uma linha escrita à mão (`cargo fmt && cargo clippy … && cargo test`). Ela não alcançava o painel, que tem workspace próprio, não conferia se o `painel/dist/` acompanhava o código e não dizia onde estava o tempo. O painel compilava por um `.sh`. Em 27/11/2026 o dono decidiu, para todos os projetos Rust (RavenRS #1034), que as checagens são subcomandos do `cargo xtask` e que não se cria `.sh` novo.
+**Decisão.** Um crate `xtask/` no workspace da raiz, só com a biblioteca padrão, e três camadas que não recebem argumentos: `dev` (só o que a mudança toca), `pr` (tudo o que ela alcança, mais o build de release e o painel para wasm32) e `release` (tudo, a documentação e o `cargo deny`). Os testes rodam no `cargo-nextest`. O `painel/compilar.sh` virou `cargo xtask painel`. O `instalar.sh`, o `desinstalar.sh` e o `pacote/gerar-rpm.sh` ficam: rodam só na fedora, como root, e migram quando forem tocados.
+**Por quê.** Rust roda igual no Mac, no Linux e no Windows, e uma tarefa por finalidade impede de rodar o gate inteiro numa mudança banal. O seletor sabe que o painel alcança o termostato, porque o termostato embute o `dist/`. O que ele deixa de fora não é conferido, por isso o seletor tem testes próprios.

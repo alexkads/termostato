@@ -226,8 +226,16 @@ Os alertas que já existiam no monitoramento continuam: CPU acima de 90 °C por 
 ## Desenvolver
 
 ```bash
-cd ~/Projects/termostato
-cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
+cargo xtask dev       # enquanto trabalha: formata e confere só o que a mudança toca
+cargo xtask pr        # o gate do PR: tudo o que a mudança alcança
+cargo xtask release   # antes de publicar uma versão: tudo, com a documentação e o cargo deny
+cargo xtask painel    # depois de mudar o painel: regrava o painel/dist/
 ```
 
-Os testes rodam no Mac e na fedora, sem root e sem MacBook (o sysfs de teste fica numa pasta temporária). O Rust é o 1.100.0, fixado só neste projeto em [`rust-toolchain.toml`](../rust-toolchain.toml). Compile e instale na fedora, que é onde o hardware está.
+O que cada uma confere está no [README](../README.md#desenvolver) e em [`xtask/src/checagens.rs`](../xtask/src/checagens.rs). Na fedora, sob a trava da oficina:
+
+```bash
+ssh fedora 'cd ~/oficina/repos/termostato && CARGO_BUILD_JOBS=6 flock ~/oficina/.trava-compilacao nice -n 10 cargo xtask pr'
+```
+
+Os testes rodam em qualquer máquina, sem root e sem MacBook (o sysfs de teste fica numa pasta temporária). O Rust é o 1.100.0, fixado só neste projeto em [`rust-toolchain.toml`](../rust-toolchain.toml). Compile e instale na fedora, que é onde o hardware está.
